@@ -686,6 +686,7 @@ Entitas minimum:
 
 - `users`
 - `roles`
+- `sessions`
 - `brands`
 - `brand_members`
 - `categories`
@@ -695,23 +696,36 @@ Entitas minimum:
 - `carts`
 - `cart_items`
 - `orders`
+- `order_brand_groups`
 - `order_items`
 - `order_status_history`
 - `payment_proofs`
+- `file_objects`
 - `marketplace_settings`
 - `storage_settings`
 - `tunnel_settings`
 - `packages`
 - `package_migrations`
 - `installation_state`
+- `audit_events`
 
 Catatan:
 
 - Semua akses brand harus melewati relasi membership/role.
 - Order item harus menyimpan snapshot nama produk, harga, brand, dan kuantitas.
 - Satu order dapat berisi item dari banyak brand; tampilan seller harus difilter pada item brand terkait.
-- Bukti transfer disimpan sebagai file di local storage dan metadata-nya disimpan di `payment_proofs`.
+- Order lintas brand dikelompokkan per brand melalui `order_brand_groups`.
+- File media disimpan sebagai object di local storage dan metadata-nya dicatat di `file_objects`.
+- Bukti transfer disimpan sebagai file private di local storage; metadata file dicatat di `file_objects`, sedangkan status/verifikasi dicatat di `payment_proofs`.
+- Event sensitif seperti login, perubahan role, assignment brand, status order, verifikasi bukti transfer, dan aktivasi package dicatat di `audit_events`.
 - Setting sensitif harus dienkripsi atau disimpan dengan mekanisme aman sesuai mode deployment.
+
+Status teknis canonical:
+
+- `orders.payment_status`: `pending`, `waiting_payment_verification`, `confirmed`, `rejected`, `cancelled`.
+- `orders.global_status`: `open`, `confirmed`, `in_progress`, `partially_shipped`, `completed`, `cancelled`.
+- `order_brand_groups.fulfillment_status`: `not_ready`, `ready_to_process`, `processing`, `shipped`, `completed`, `cancelled`.
+- `payment_proofs.status`: `uploaded`, `verified`, `rejected`.
 
 ## 13. Acceptance Criteria MVP
 

@@ -131,38 +131,189 @@ VPS
   +-- Web Install Panel
 ```
 
-## 6. Rekomendasi Struktur Repository
+## 6. Struktur Project
+
+Struktur project memakai monorepo agar backend Rust, Tauri desktop shell, SvelteKit frontend, migration, dan package/module contract dapat dikembangkan dalam satu workspace.
+
+### 6.1 Struktur Direktori Target
 
 ```txt
 apps/
   backend/                  # Axum binary entrypoint
+    src/
+      main.rs               # boot Axum server
+      bootstrap.rs          # config/runtime initialization
+    Cargo.toml
+
   desktop/                  # Tauri v2 desktop shell
+    src-tauri/
+      src/
+        main.rs             # Tauri entrypoint
+        process.rs          # process supervisor bridge
+        commands.rs         # safe Tauri commands
+      tauri.conf.json
+      Cargo.toml
+    src/                    # desktop control panel UI if separated from web
+
   web/                      # SvelteKit app: storefront/admin/install
+    src/
+      routes/
+        (storefront)/
+        (admin)/
+        (install)/
+      lib/
+        api/
+        components/
+        stores/
+        styles/
+    static/
+    package.json
+    svelte.config.js
+    tailwind.config.*
 
 crates/
   core-domain/              # entities, value objects, domain rules
+    src/
+      brand/
+      catalog/
+      cart/
+      order/
+      payment/
+      package/
+      user/
+
   core-app/                 # use cases/application services
+    src/
+      services/
+      commands/
+      queries/
+
   core-api/                 # Axum routes, DTOs, middleware, OpenAPI
+    src/
+      routes/
+        admin/
+        auth/
+        install/
+        packages/
+        storefront/
+        system/
+      middleware/
+      dto/
+      errors.rs
+
   core-auth/                # auth, session, RBAC, CSRF, password hashing
+    src/
+      password.rs
+      session.rs
+      csrf.rs
+      rbac.rs
+      rate_limit.rs
+
   core-db/                  # sqlx repositories, transactions, migrations
+    src/
+      repositories/
+      transactions.rs
+      migrations.rs
+      pool.rs
+
   core-storage/             # StorageProvider trait + Local adapter
+    src/
+      provider.rs
+      local.rs
+      validation.rs
+
   core-runtime/             # config, paths, mode, health, version
+    src/
+      config.rs
+      paths.rs
+      health.rs
+      mode.rs
+      secrets.rs
+
   core-installer/           # preflight, setup, install lock, first admin
+    src/
+      preflight.rs
+      setup.rs
+      lock.rs
+
   core-packages/            # package registry, feature gate, package migrations
+    src/
+      registry.rs
+      feature_gate.rs
+      compatibility.rs
+      migrations.rs
+
   sidecar-postgres/         # bundled PostgreSQL lifecycle adapter
+    src/
+      initdb.rs
+      process.rs
+      status.rs
+
   sidecar-cloudflared/      # cloudflared lifecycle/status adapter
+    src/
+      process.rs
+      config.rs
+      status.rs
 
 migrations/
   core/                     # core DB migrations
+    0001_installation.sql
+    0002_users_auth.sql
+    0003_marketplace_catalog.sql
+    0004_orders_payment_proofs.sql
+    0005_packages_audit.sql
+
   packages/                 # package migration folders
+    promo/
+    online-payment/
+    delivery/
 
 docs/
   deployment/
   security/
   packages/
+
+PRD.md
+TRD.md
+ERD.md
+README.md
 ```
 
-Catatan: struktur ini dapat disederhanakan saat awal implementasi, tetapi boundary-nya tetap perlu dijaga.
+### 6.2 Root Files
+
+File root yang disarankan saat implementasi dimulai:
+
+```txt
+Cargo.toml                  # Rust workspace
+Cargo.lock
+package.json                # JS workspace jika memakai pnpm/npm/bun workspace
+pnpm-workspace.yaml         # jika memakai pnpm
+.env.example                # contoh env non-secret
+.gitignore
+README.md
+PRD.md
+TRD.md
+ERD.md
+```
+
+### 6.3 Boundary Rules
+
+- `apps/backend` hanya entrypoint dan composition root; logic utama berada di `crates/*`.
+- `apps/desktop` tidak boleh mengandung marketplace business logic.
+- `apps/web` tidak boleh menjadi sumber kebenaran untuk authorization, package activation, atau order status.
+- `core-domain` tidak boleh depend ke Axum, SQLx, Tauri, filesystem, atau sidecar.
+- `core-api` boleh depend ke `core-app`, tetapi handler tidak boleh bypass service layer langsung ke repository untuk mutation kritikal.
+- `core-db` tidak boleh depend ke `core-api` atau frontend type.
+- `core-packages` hanya menyediakan feature gate dan metadata pada MVP; dynamic plugin loader ditunda.
+- `sidecar-*` hanya boleh dipakai oleh runtime/desktop adapter, bukan domain service.
+
+### 6.4 Dokumentasi Terkait
+
+- Product requirement: [`PRD.md`](./PRD.md)
+- Technical requirement: `TRD.md`
+- Entity relationship design: [`ERD.md`](./ERD.md)
+
+Catatan: struktur ini dapat disederhanakan saat awal implementasi, tetapi boundary arsitektur harus tetap dijaga.
 
 ## 7. Backend Module Boundaries
 
@@ -631,6 +782,8 @@ Semua query seller wajib difilter berdasarkan membership backend, bukan paramete
 
 ## 14. Data Model
 
+Detail ERD lengkap tersedia di [`ERD.md`](./ERD.md). Bagian ini merangkum entitas teknis utama dan keputusan data model yang memengaruhi implementasi backend.
+
 ### 14.1 Core Tables
 
 Entitas minimum:
@@ -644,6 +797,7 @@ Entitas minimum:
 - `products`
 - `product_variants`
 - `product_images`
+- `file_objects`
 - `carts`
 - `cart_items`
 - `orders`
@@ -716,7 +870,7 @@ Status produk pada PRD dipetakan menjadi tiga kelompok status teknis:
 | PRD Status | `orders.payment_status` | `orders.global_status` | `order_brand_groups.fulfillment_status` | Catatan |
 | --- | --- | --- | --- | --- |
 | `pending` | `pending` | `open` | `not_ready` | Order dibuat, belum ada bukti transfer. |
-| `waiting_payment_verification` | `waiting_verification` | `open` | `not_ready` | Bukti transfer diupload, menunggu verifikasi admin. |
+| `waiting_payment_verification` | `waiting_payment_verification` | `open` | `not_ready` | Bukti transfer diupload, menunggu verifikasi admin. |
 | `confirmed` | `confirmed` | `confirmed` | `ready_to_process` | Pembayaran manual diverifikasi. |
 | `processing` | `confirmed` | `in_progress` | `processing` | Seller/brand mulai memproses item. |
 | `shipped` | `confirmed` | `in_progress` atau `partially_shipped` | `shipped` | Dapat berbeda antar brand. |
@@ -893,7 +1047,7 @@ Status disarankan:
 
 - `pending`
 - `waiting_payment_verification`
-- `payment_rejected`
+- `rejected`
 - `confirmed`
 
 Proof tidak boleh otomatis mengkonfirmasi order.
