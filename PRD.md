@@ -957,7 +957,11 @@ MVP dianggap berhasil jika:
 - MVP checkout menggunakan manual transfer dengan upload bukti transfer.
 - Satu order boleh berisi produk lintas brand.
 - Order lintas brand memakai status global untuk pembayaran/order dan status fulfillment per brand/sub-order.
-- Bukti transfer schema mendukung banyak file per order; UI MVP dapat membatasi satu bukti transfer aktif per order.
+- Bukti transfer schema mendukung banyak file per order; UI MVP membatasi satu bukti transfer aktif per order.
+- Akses bukti transfer dikendalikan oleh RBAC backend, bukan file public/static.
+- VPS production baseline mendukung binary + systemd dan container sejak awal.
+- Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Package berbayar diarahkan ke remote entitlement; base open source tetap berjalan tanpa entitlement berbayar.
 - Storage aktif MVP adalah local storage; S3-compatible disiapkan untuk roadmap setelah MVP.
 - Seller tidak mendaftar sendiri; akun seller dibuat oleh Super Admin.
 - Satu seller dapat mengelola banyak brand melalui assignment.
@@ -970,4 +974,6 @@ MVP dianggap berhasil jika:
 Keputusan yang masih perlu dikunci:
 
 - Bagaimana strategi update aplikasi desktop dan migrasi database setelah user punya data production?
-- Apakah UI MVP upload bukti transfer akan membatasi satu file aktif atau langsung mengizinkan banyak file?
+- Detail matrix RBAC payment proof: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk melihat file proof ditambahkan.
+- Detail format distribusi desktop per OS: Windows `.msi`/`.exe`, macOS `.dmg`, Linux `.deb`/AppImage/RPM.
+- Detail privacy/grace period remote entitlement untuk package berbayar.

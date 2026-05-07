@@ -4,7 +4,7 @@ Self-hosted, installable, multi-brand marketplace platform.
 
 `market.osource.id` dirancang sebagai marketplace yang bisa dijalankan sendiri oleh operator, baik dari desktop lokal maupun dari VPS. Customer mengakses marketplace melalui web responsive, sementara operator mengelola brand, seller, produk, order, storage, tunnel, dan package dari dashboard admin.
 
-> Status: planning/documentation phase. Implementasi aplikasi belum dimulai.
+> Status: Phase 0–1 scaffold started. Repository now contains authoritative planning docs plus initial Rust Axum workspace, SvelteKit web skeleton, Tauri desktop shell skeleton, migration skeleton, and VPS/container deployment baseline. Production features are not complete yet.
 
 ## Konsep Produk
 
@@ -135,12 +135,17 @@ Tauri App
 - [`PRD.md`](./PRD.md) — Product Requirements Document.
 - [`TRD.md`](./TRD.md) — Technical Requirements Document.
 - [`ERD.md`](./ERD.md) — Entity Relationship Diagram dan rancangan data model.
+- [`DESIGN.md`](./DESIGN.md) — Project-local design system and UI guidance.
+- [`AGENTS.md`](./AGENTS.md) — Contributor/AI agent constraints.
+- [`.opencode/plans/20260507-2054-production-ready-roadmap.md`](./.opencode/plans/20260507-2054-production-ready-roadmap.md) — Production-ready implementation roadmap.
 
 ## Keputusan Produk yang Sudah Dikunci
 
 - Desktop installer membundel PostgreSQL lokal.
 - Distribusi aplikasi membundel `cloudflared` sebagai sidecar.
 - MVP checkout memakai manual transfer dengan upload bukti transfer.
+- UI MVP upload bukti transfer memakai satu file aktif per order; schema tetap dapat menyimpan histori/multi-proof.
+- Payment proof private dan akses file proof dikendalikan RBAC backend; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
 - Satu order boleh berisi produk lintas brand.
 - Order lintas brand memakai status global + fulfillment status per brand/sub-order.
 - Storage aktif MVP adalah local storage.
@@ -148,6 +153,26 @@ Tauri App
 - Satu seller dapat mengelola banyak brand melalui assignment.
 - Satu domain merepresentasikan satu marketplace.
 - Produk memakai model open-core: base open source + package/module berbayar.
+- VPS baseline mendukung binary + systemd dan container sejak awal.
+- Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Package berbayar diarahkan ke remote entitlement; base open source tetap berjalan tanpa paid entitlement.
+
+## Scaffold Saat Ini
+
+Phase 0–1 scaffold yang sudah ada:
+
+- `Cargo.toml`, `Cargo.lock`, `apps/backend`, dan `crates/*` untuk workspace Rust/Axum awal.
+- `migrations/core` dan `migrations/packages` untuk batas migration core/package.
+- `apps/web` untuk SvelteKit + Tailwind skeleton dengan route groups storefront, admin, dan install panel.
+- `apps/desktop/src-tauri` untuk Tauri v2 desktop shell skeleton.
+- `Dockerfile`, `docker-compose.yml`, dan `docs/deployment/` untuk baseline VPS/container/systemd.
+
+Known gaps:
+
+- Host saat ini belum punya `rustc`/`cargo`; validasi Rust dilakukan via Docker `rust:1.88`.
+- Non-desktop Rust workspace sudah build/test/fmt/clippy via Docker; full Tauri desktop build masih butuh dependency system Linux/Tauri dan smoke test per OS.
+- Web skeleton sudah `npm run check` dan `npm run build`.
+- Backend route, install lock, auth/session/CSRF/RBAC penuh, catalog, checkout, protected media, sidecar supervisor, dan real package entitlement belum diimplementasikan.
 
 ## Roadmap Ringkas
 

@@ -1,0 +1,3 @@
+-- Package migrations are intentionally separated from core migrations.
+-- MVP packages use registry/capability/feature-gate boundaries only; no dynamic plugin runtime.
+-- This placeholder gives sqlx a valid package migration set from the first scaffold phase.

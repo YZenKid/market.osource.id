@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "market.osource.id",
+  "version": "0.1.0",
+  "identifier": "id.osource.market.desktop",
+  "build": {
+    "frontendDist": "../",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "market.osource.id",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 920,
+        "minHeight": 640
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Business",
+    "shortDescription": "Self-hosted multi-brand marketplace desktop supervisor",
+    "longDescription": "Desktop shell for supervising bundled PostgreSQL, Axum backend, web UI, and opt-in cloudflared sidecar."
+  }
+}

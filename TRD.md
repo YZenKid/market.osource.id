@@ -538,14 +538,17 @@ Requirements:
 
 VPS tidak memakai Tauri. Backend Axum berjalan sebagai service.
 
-Deployment awal dapat berupa:
+Deployment awal wajib mendukung:
 
 - binary + systemd,
 - container,
+
+Deployment lanjutan dapat menambahkan:
+
 - package manager script,
 - manual service setup.
 
-TRD ini merekomendasikan binary + systemd sebagai baseline production VPS.
+TRD ini menetapkan binary + systemd dan container sebagai baseline production VPS sejak awal.
 
 ### 10.2 VPS Install Panel
 
@@ -1501,16 +1504,18 @@ Index awal yang disarankan:
 - Order boleh lintas brand.
 - Order lintas brand direkomendasikan memakai `order_brand_groups`.
 - Manual transfer memakai upload bukti transfer.
+- UI MVP membatasi satu bukti transfer aktif per order, sementara schema tetap mendukung banyak proof.
+- Payment proof dilindungi RBAC backend; Super Admin dapat melihat semua proof, seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
 - Package model MVP berupa capability registry + package migration boundary, bukan dynamic plugin runtime.
+- VPS baseline mendukung binary + systemd dan container sejak awal.
+- Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Package berbayar diarahkan ke remote entitlement.
 
 ## 30. Pertanyaan Teknis Tersisa
 
-- Apakah UI MVP membatasi satu bukti transfer aktif per order, meski schema mendukung banyak file?
-- Apakah seller boleh melihat bukti transfer order lintas brand, atau hanya Super Admin?
-- Format distribusi desktop awal: `.deb`, `.AppImage`, `.msi`, `.dmg`, atau prioritas platform tertentu?
-- Apakah VPS install akan didukung lewat binary + systemd saja, atau container juga sejak awal?
 - Apakah SvelteKit dan Axum diserve dari satu origin/backend, atau SvelteKit dipisahkan saat VPS?
-- Apakah package berbayar akan didistribusikan sebagai source/private crate, binary artifact, atau remote entitlement pada fase awal monetisasi?
+- Detail format distribusi desktop per OS: Windows `.msi`/`.exe`, macOS `.dmg`, Linux `.deb`/AppImage/RPM.
+- Detail privacy payload dan grace period remote entitlement.
 
 ## 31. MVP Technical Acceptance Criteria
 

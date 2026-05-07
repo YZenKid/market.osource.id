@@ -1,0 +1,18 @@
+[package]
+name = "core-api"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+core-app.workspace = true
+core-installer.workspace = true
+core-packages.workspace = true
+core-runtime.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tower-http.workspace = true
+tracing.workspace = true

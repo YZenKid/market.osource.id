@@ -496,7 +496,7 @@ Rekomendasi:
 
 ## 7. Open Questions
 
-- Apakah UI MVP membatasi satu bukti transfer aktif per order atau langsung mengizinkan banyak file?
-- Apakah seller boleh melihat payment proof order lintas brand, atau hanya Super Admin?
+- Bagaimana constraint/index untuk menandai satu payment proof aktif per order di UI MVP tanpa menghapus histori multi-proof?
+- Detail matrix RBAC payment proof: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
 - Apakah category wajib scoped per brand atau ada global marketplace category pada fase lanjut?
 - Apakah product price disimpan hanya di variant, atau product juga punya default price jika tanpa variant?

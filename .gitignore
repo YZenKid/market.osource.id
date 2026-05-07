@@ -1,0 +1,41 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / SvelteKit
+node_modules/
+apps/web/.svelte-kit/
+apps/web/build/
+apps/web/.vite/
+apps/web/dist/
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Local runtime data
+/storage/
+/data/
+/tmp/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and reports
+*.log
+coverage/
+.nyc_output/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

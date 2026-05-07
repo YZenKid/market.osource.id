@@ -1,0 +1,22 @@
+[Unit]
+Description=market.osource.id backend
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=market
+Group=market
+WorkingDirectory=/opt/market-osource
+EnvironmentFile=/etc/market-osource/market-osource.env
+ExecStart=/usr/local/bin/market-backend
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/market-osource
+
+[Install]
+WantedBy=multi-user.target
