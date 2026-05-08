@@ -30,18 +30,26 @@ Task ID: `20260508-0548-release-gate-plan`
 | Docker `rust:1.88` `cargo clippy --workspace --exclude market-desktop --all-targets -- -D warnings` | Passed | Desktop excluded until Linux Tauri system deps are added. |
 | Docker `rust:1.88` `cargo test --workspace --exclude market-desktop` | Passed | Includes new readiness and migration helper tests. |
 | Docker PostgreSQL 16 + Docker `rust:1.88` `TEST_DATABASE_URL=... cargo test -p core-db -- --ignored` | Passed | Validates fresh core migration apply, package migration boundary record, runner-level advisory-lock release, and advisory lock behavior against disposable PostgreSQL container. |
+| Local `rustc --version` / `cargo --version` | Passed | User installed local Rust toolchain: `rustc 1.95.0`, `cargo 1.95.0`. |
+| Local `cargo tauri --version` | Passed | Installed user-level `tauri-cli 2.11.1` via `cargo install tauri-cli --version 2.11.1 --locked`. |
+| Local `cargo fmt --check` | Passed | Runs with host Rust toolchain. |
+| Local `cargo clippy --workspace --exclude market-desktop --all-targets -- -D warnings` | Passed | Updated `RuntimeMode` default derive to satisfy newer Rust 1.95 Clippy. |
+| Local `cargo test --workspace --exclude market-desktop` | Passed | Includes readiness and migration helper tests. |
+| Local PostgreSQL container + `TEST_DATABASE_URL=... cargo test -p core-db -- --ignored` | Passed | Validates live DB migration tests through host Cargo against PostgreSQL 16 exposed on localhost. |
+| Fedora 43 container with Tauri Linux deps + `cargo check -p market-desktop` | Passed | Validates `market-desktop` with `dbus-devel`, `gtk3-devel`, `webkit2gtk4.1-devel`, `librsvg2-devel`, and related deps installed in container. |
+| Local `npx tauri info` | Partial | Rust/Cargo/Tauri CLI are installed, but host OS still lacks `webkit2gtk-4.1` and `rsvg2`; `sudo dnf install ...` requires interactive password, so host-native desktop validation remains blocked by system deps. |
 | `npm run check` in `apps/web` | Passed | `svelte-check found 0 errors and 0 warnings`. |
 | `npm run build` in `apps/web` | Passed | SvelteKit production build completed. |
-| `npm audit --audit-level=moderate` in `apps/web` | Non-blocking warning | Reports 3 low-severity transitive SvelteKit `cookie <0.7.0` findings. `npm audit fix --force` proposes breaking downgrade and was not run. |
+| `npm audit --audit-level=moderate` in `apps/web` | Non-blocking warning | After updating compatible SvelteKit/adapter/node/vite/typescript packages, npm still reports 3 low-severity transitive SvelteKit `cookie@0.6.0` findings. Latest SvelteKit still depends on `cookie@0.6.0`; `npm audit fix --force` proposes breaking downgrade and was not run. |
 
 ## Known Gaps
 
 - Gate B is not fully production-complete: DB pool is optional and install-state service remains Gate C work. `/ready` now reports missing install state as not ready instead of masking it.
-- Full `market-desktop` validation still requires Linux Tauri/WebKit/DBus system dependencies and later OS-specific smoke tests.
+- Host-native full `market-desktop` validation still requires Linux Tauri/WebKit/rsvg system dependencies (`webkit2gtk4.1-devel`, `librsvg2-devel`, etc.) installed with sudo. Containerized Fedora validation for `cargo check -p market-desktop` now passes.
 - CI has not run remotely yet; local validation is the current evidence.
-- `npm audit` low-severity transitive findings remain tracked until dependency chain resolves them.
+- `npm audit` low-severity transitive findings remain tracked until SvelteKit upgrades its internal `cookie` dependency or npm advisory metadata changes.
 - The Compose `web` service uses a local bind mount for smoke/dev modeling; release image packaging remains later Gate J work.
-- Migration advisory locking now uses one acquired PostgreSQL session for lock and unlock, but `sqlx::migrate!` still runs through the pool between those calls. This is acceptable for scaffold safety because runner-level release is live-tested; tighter migration serialization can be revisited when automatic startup migrations are wired in Gate C/J.
+- Migration advisory locking now uses one acquired PostgreSQL session for lock, migration execution, and unlock for core migrations; package boundary migration also executes on the locked session.
 
 ## Security Notes
 

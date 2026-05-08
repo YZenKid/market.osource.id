@@ -13,57 +13,54 @@ pub fn package_migrations_path() -> &'static str {
 
 pub async fn run_core_migrations(pool: &PgPool) -> anyhow::Result<()> {
     let mut connection = pool.acquire().await?;
-    run_with_advisory_lock(&mut connection, CORE_MIGRATION_LOCK_ID, || async {
-        sqlx::migrate!("../../migrations/core").run(pool).await?;
-        Ok(())
-    })
-    .await?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(CORE_MIGRATION_LOCK_ID)
+        .execute(connection.as_mut())
+        .await?;
+
+    let migration_result = sqlx::migrate!("../../migrations/core")
+        .run(connection.as_mut())
+        .await;
+    let unlock_result = unlock_advisory_lock(&mut connection, CORE_MIGRATION_LOCK_ID).await;
+
+    migration_result?;
+    unlock_result?;
     Ok(())
 }
 
 pub async fn run_package_migrations(pool: &PgPool) -> anyhow::Result<()> {
     let mut connection = pool.acquire().await?;
-    run_with_advisory_lock(&mut connection, PACKAGE_MIGRATION_LOCK_ID, || async {
-        sqlx::query(
-            r#"
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(PACKAGE_MIGRATION_LOCK_ID)
+        .execute(connection.as_mut())
+        .await?;
+
+    let migration_result = sqlx::query(
+        r#"
             INSERT INTO package_migrations (package_id, package_version, migration_version, checksum)
             VALUES ('core.package-boundary', '0.1.0', '0001_package_boundary', 'placeholder')
             ON CONFLICT (package_id, migration_version) DO NOTHING
             "#,
-        )
-        .execute(pool)
-        .await?;
+    )
+    .execute(connection.as_mut())
+    .await;
+    let unlock_result = unlock_advisory_lock(&mut connection, PACKAGE_MIGRATION_LOCK_ID).await;
 
-        Ok::<(), anyhow::Error>(())
-    })
-    .await?;
+    migration_result?;
+    unlock_result?;
     Ok(())
 }
 
-async fn run_with_advisory_lock<F, Fut>(
+async fn unlock_advisory_lock(
     connection: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
     lock_id: i64,
-    operation: F,
-) -> anyhow::Result<()>
-where
-    F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<()>>,
-{
-    sqlx::query("SELECT pg_advisory_lock($1)")
+) -> anyhow::Result<()> {
+    let unlocked: Result<bool, sqlx::Error> = sqlx::query_scalar("SELECT pg_advisory_unlock($1)")
         .bind(lock_id)
-        .execute(connection.as_mut())
-        .await?;
+        .fetch_one(connection.as_mut())
+        .await;
 
-    let operation_result = operation().await;
-
-    let unlock_result: Result<bool, sqlx::Error> =
-        sqlx::query_scalar("SELECT pg_advisory_unlock($1)")
-            .bind(lock_id)
-            .fetch_one(connection.as_mut())
-            .await;
-
-    operation_result?;
-    match unlock_result {
+    match unlocked {
         Ok(true) => {}
         Ok(false) => anyhow::bail!("migration advisory lock {lock_id} was not held by session"),
         Err(error) => return Err(error.into()),
