@@ -959,8 +959,16 @@ MVP dianggap berhasil jika:
 - Order lintas brand memakai status global untuk pembayaran/order dan status fulfillment per brand/sub-order.
 - Bukti transfer schema mendukung banyak file per order; UI MVP membatasi satu bukti transfer aktif per order.
 - Akses bukti transfer dikendalikan oleh RBAC backend, bukan file public/static.
+- Seller default hanya melihat status pembayaran/order brand assigned; seller boleh melihat file bukti transfer hanya jika Super Admin memberi permission eksplisit dan scope brand/order cocok.
+- Nama permission payment proof canonical:
+  - `payment_proof.view_assigned`: seller dapat melihat/download file proof hanya untuk order yang memiliki item dari brand assigned miliknya; akses wajib diaudit.
+  - `payment_proof.verify`: Super Admin atau role eksplisit dapat menandai proof/order payment sebagai verified/confirmed.
+  - `payment_proof.reject`: Super Admin atau role eksplisit dapat menolak proof dan mencatat alasan reject.
 - VPS production baseline mendukung binary + systemd dan container sejak awal.
+- VPS production menggunakan SvelteKit service terpisah dari Axum API service, biasanya di balik reverse proxy satu origin publik.
 - Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Target awal desktop adalah all-platform release candidate; public v1.0 memerlukan kebijakan signing/notarization/distribution yang layak.
+- Harga produk MVP bersumber dari `product_variants`; produk sederhana memakai default/internal variant.
 - Package berbayar diarahkan ke remote entitlement; base open source tetap berjalan tanpa entitlement berbayar.
 - Storage aktif MVP adalah local storage; S3-compatible disiapkan untuk roadmap setelah MVP.
 - Seller tidak mendaftar sendiri; akun seller dibuat oleh Super Admin.
@@ -974,6 +982,6 @@ MVP dianggap berhasil jika:
 Keputusan yang masih perlu dikunci:
 
 - Bagaimana strategi update aplikasi desktop dan migrasi database setelah user punya data production?
-- Detail matrix RBAC payment proof: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk melihat file proof ditambahkan.
 - Detail format distribusi desktop per OS: Windows `.msi`/`.exe`, macOS `.dmg`, Linux `.deb`/AppImage/RPM.
+- Detail signing/notarization/distribution untuk public v1.0 desktop.
 - Detail privacy/grace period remote entitlement untuk package berbayar.

@@ -383,6 +383,14 @@ Berisi:
 - RBAC/permission checks.
 - Rate limiting untuk login dan mutation sensitif.
 
+Permission payment proof canonical:
+
+- `payment_proof.view_assigned`: seller dapat melihat/download file proof hanya untuk order yang memiliki item dari brand assigned miliknya; akses harus brand/order-scoped dan dicatat di `audit_events`.
+- `payment_proof.verify`: role eksplisit dapat memverifikasi bukti transfer dan mengubah status pembayaran melalui use case backend.
+- `payment_proof.reject`: role eksplisit dapat menolak bukti transfer dengan alasan reject melalui use case backend.
+
+Super Admin memiliki seluruh permission di atas. Seller default tidak memiliki `payment_proof.view_assigned` dan hanya melihat status pembayaran/order brand assigned.
+
 ### 7.6 `core-storage`
 
 Berisi trait storage dan adapter.
@@ -1506,15 +1514,19 @@ Index awal yang disarankan:
 - Manual transfer memakai upload bukti transfer.
 - UI MVP membatasi satu bukti transfer aktif per order, sementara schema tetap mendukung banyak proof.
 - Payment proof dilindungi RBAC backend; Super Admin dapat melihat semua proof, seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
+- Permission seller untuk file payment proof harus eksplisit, brand/order-scoped, dan diaudit; default seller tidak dapat melihat file proof.
 - Package model MVP berupa capability registry + package migration boundary, bukan dynamic plugin runtime.
 - VPS baseline mendukung binary + systemd dan container sejak awal.
+- VPS production memakai SvelteKit service terpisah dari Axum API service. Reverse proxy direkomendasikan menyajikan satu origin publik: app routes ke SvelteKit, `/api/*` dan protected media ke Axum.
 - Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Target awal desktop adalah all-platform RC; public v1.0 membutuhkan kebijakan signing/notarization/distribution yang eksplisit.
 - Package berbayar diarahkan ke remote entitlement.
+- Harga produk canonical berada di `product_variants`; produk sederhana memakai default/internal variant.
 
 ## 30. Pertanyaan Teknis Tersisa
 
-- Apakah SvelteKit dan Axum diserve dari satu origin/backend, atau SvelteKit dipisahkan saat VPS?
 - Detail format distribusi desktop per OS: Windows `.msi`/`.exe`, macOS `.dmg`, Linux `.deb`/AppImage/RPM.
+- Detail signing/notarization/distribution untuk public v1.0 desktop.
 - Detail privacy payload dan grace period remote entitlement.
 
 ## 31. MVP Technical Acceptance Criteria

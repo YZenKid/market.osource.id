@@ -11,6 +11,7 @@ anyhow.workspace = true
 axum.workspace = true
 core-api.workspace = true
 core-app.workspace = true
+core-db.workspace = true
 core-runtime.workspace = true
 tokio.workspace = true
 tracing.workspace = true

@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = AppConfig::from_env()?;
     let bind_addr = config.bind_addr;
-    let state = AppState::new(config);
+    let state = AppState::new(config).try_connect_db().await;
     let app = app_router(state);
     let listener = TcpListener::bind(bind_addr).await?;
 

@@ -14,6 +14,11 @@ impl LocalStorageProvider {
         Self { root: root.into() }
     }
 
+    pub async fn ensure_root(&self) -> Result<(), StorageError> {
+        tokio::fs::create_dir_all(&self.root).await?;
+        Ok(())
+    }
+
     fn safe_path(&self, bucket: &str, object_key: &str) -> Result<PathBuf, StorageError> {
         if bucket.is_empty()
             || object_key.is_empty()

@@ -473,6 +473,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "core-app",
+ "core-db",
  "core-installer",
  "core-packages",
  "core-runtime",
@@ -487,12 +488,17 @@ name = "core-app"
 version = "0.1.0"
 dependencies = [
  "core-auth",
+ "core-db",
  "core-domain",
  "core-packages",
  "core-runtime",
  "core-storage",
+ "secrecy",
  "serde",
+ "sqlx",
  "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -516,6 +522,7 @@ dependencies = [
  "anyhow",
  "secrecy",
  "sqlx",
+ "tokio",
  "tracing",
 ]
 
@@ -2142,6 +2149,7 @@ dependencies = [
  "axum",
  "core-api",
  "core-app",
+ "core-db",
  "core-runtime",
  "tokio",
  "tracing",

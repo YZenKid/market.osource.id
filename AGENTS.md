@@ -82,14 +82,18 @@ Jangan mengganti stack tanpa instruksi eksplisit user.
 - Customer dapat upload bukti transfer.
 - UI MVP upload bukti transfer memakai satu file aktif per order; schema boleh tetap multi-proof untuk histori/ekstensi.
 - Payment proof tidak otomatis membuat order confirmed.
-- Payment proof dilindungi RBAC backend; Super Admin dapat melihat semua proof, seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
+- Payment proof dilindungi RBAC backend; Super Admin dapat melihat semua proof, seller default hanya melihat status pembayaran/order brand assigned, dan seller hanya boleh melihat file proof jika punya permission eksplisit yang brand/order-scoped serta diaudit.
+- Permission payment proof canonical: `payment_proof.view_assigned`, `payment_proof.verify`, dan `payment_proof.reject`. `payment_proof.view_assigned` wajib brand/order-scoped; semua akses file proof harus dicatat di `audit_events`.
 - Storage aktif MVP adalah local storage.
 - S3-compatible adapter adalah roadmap setelah MVP.
 - Desktop installer membundel PostgreSQL.
 - Distribusi aplikasi membundel `cloudflared` sidecar.
 - Desktop installer menargetkan Windows, macOS, dan Linux sejak awal.
+- Target awal desktop adalah all-platform RC; public v1.0 membutuhkan kebijakan signing/notarization/distribution yang eksplisit.
 - VPS deployment baseline mendukung binary + systemd dan container sejak awal.
+- VPS production memakai SvelteKit service terpisah dari Axum API service; reverse proxy sebaiknya menyajikan satu origin publik dengan app routes ke SvelteKit dan `/api/*`/protected media ke Axum.
 - Package berbayar diarahkan ke remote entitlement; base open source tetap berjalan tanpa paid entitlement.
+- Harga produk MVP bersumber dari `product_variants`; produk sederhana memakai default/internal variant.
 - Package/module MVP hanya capability registry + migration boundary, bukan dynamic plugin runtime penuh.
 
 ## 5. Prinsip Arsitektur Wajib
@@ -309,7 +313,7 @@ Lihat PRD/TRD/ERD untuk daftar terbaru. Pertanyaan yang masih perlu dikunci sebe
 
 - Strategi update aplikasi desktop dan migrasi database setelah user punya data production.
 - Detail format distribusi desktop per OS: Windows `.msi`/`.exe`, macOS `.dmg`, Linux `.deb`/AppImage/RPM.
+- Detail signing/notarization/distribution untuk public v1.0 desktop.
 - Detail privacy payload dan grace period remote entitlement.
-- Apakah SvelteKit dan Axum diserve dari satu origin/backend, atau SvelteKit dipisahkan saat VPS.
 - Apakah category wajib scoped per brand atau ada global marketplace category pada fase lanjut.
-- Apakah product price disimpan hanya di variant, atau product juga punya default price jika tanpa variant.
+- Detail constraint/UX default/internal variant untuk produk sederhana.

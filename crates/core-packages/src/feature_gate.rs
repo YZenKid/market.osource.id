@@ -16,6 +16,10 @@ impl FeatureGate {
         self.enabled.contains(capability)
     }
 
+    pub fn enabled_count(&self) -> usize {
+        self.enabled.len()
+    }
+
     pub fn require(&self, capability: &str) -> Result<(), FeatureGateError> {
         self.is_enabled(capability)
             .then_some(())

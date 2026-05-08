@@ -30,3 +30,10 @@ pub fn base_registry() -> Vec<PackageDefinition> {
         },
     ]
 }
+
+pub fn base_capabilities() -> Vec<String> {
+    base_registry()
+        .into_iter()
+        .flat_map(|package| package.capabilities)
+        .collect()
+}

@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 axum.workspace = true
 core-app.workspace = true
+core-db.workspace = true
 core-installer.workspace = true
 core-packages.workspace = true
 core-runtime.workspace = true

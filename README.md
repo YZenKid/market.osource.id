@@ -145,7 +145,7 @@ Tauri App
 - Distribusi aplikasi membundel `cloudflared` sebagai sidecar.
 - MVP checkout memakai manual transfer dengan upload bukti transfer.
 - UI MVP upload bukti transfer memakai satu file aktif per order; schema tetap dapat menyimpan histori/multi-proof.
-- Payment proof private dan akses file proof dikendalikan RBAC backend; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
+- Payment proof private dan akses file proof dikendalikan RBAC backend; seller default hanya melihat status pembayaran/order brand assigned. Permission canonical: `payment_proof.view_assigned`, `payment_proof.verify`, dan `payment_proof.reject`; akses file proof seller wajib brand/order-scoped dan diaudit.
 - Satu order boleh berisi produk lintas brand.
 - Order lintas brand memakai status global + fulfillment status per brand/sub-order.
 - Storage aktif MVP adalah local storage.
@@ -225,14 +225,17 @@ Known gaps:
 
 ## Development Status
 
-Belum ada kode aplikasi di repository ini. Saat ini repository berisi dokumen perencanaan:
+Phase 0–1 scaffold sudah dimulai dan commit foundation awal sudah tersedia. Repository saat ini berisi:
 
-- PRD
-- TRD
-- ERD
-- README
+- dokumen otoritatif: `README.md`, `PRD.md`, `TRD.md`, `ERD.md`, `DESIGN.md`, `AGENTS.md`;
+- planning/evidence release di `.opencode/`;
+- Rust workspace untuk Axum backend dan `crates/core-*`;
+- SvelteKit web skeleton untuk storefront/admin/install;
+- Tauri desktop shell skeleton;
+- migration skeleton;
+- baseline VPS container/systemd docs.
 
-Implementasi akan mengikuti keputusan dan acceptance criteria dari dokumen tersebut.
+Implementasi production behavior masih berjalan bertahap mengikuti release gate plan. Backend route, install lock, auth/session/CSRF/RBAC penuh, catalog, checkout, protected media, sidecar supervisor, dan entitlement nyata belum selesai.
 
 ## Catatan Keamanan Awal
 

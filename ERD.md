@@ -497,6 +497,7 @@ Rekomendasi:
 ## 7. Open Questions
 
 - Bagaimana constraint/index untuk menandai satu payment proof aktif per order di UI MVP tanpa menghapus histori multi-proof?
-- Detail matrix RBAC payment proof: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned sampai permission eksplisit untuk file proof ditambahkan.
+- Payment proof file access matrix sudah dikunci: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned; seller dengan permission eksplisit hanya dapat melihat proof untuk order/brand assigned dan akses harus diaudit.
+- Permission payment proof canonical: `payment_proof.view_assigned`, `payment_proof.verify`, dan `payment_proof.reject`. `payment_proof.view_assigned` wajib brand/order-scoped; semua akses file proof dicatat di `audit_events`.
 - Apakah category wajib scoped per brand atau ada global marketplace category pada fase lanjut?
-- Apakah product price disimpan hanya di variant, atau product juga punya default price jika tanpa variant?
+- Product price MVP sudah dikunci variant-only; produk sederhana memakai default/internal variant. Pertanyaan tersisa hanya detail constraint/UX default variant.

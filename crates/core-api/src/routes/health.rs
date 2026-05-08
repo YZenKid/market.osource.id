@@ -32,15 +32,18 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 pub async fn ready(State(state): State<AppState>) -> Json<ReadyResponse> {
-    let storage_ok = std::path::Path::new(&state.config.storage_path).exists()
-        || std::fs::create_dir_all(&state.config.storage_path).is_ok();
+    let report = state.readiness().await;
     Json(ReadyResponse {
-        status: if storage_ok { "ready" } else { "not_ready" },
-        checks: vec![ReadyCheck {
-            name: "storage_path",
-            ok: storage_ok,
-            message: (!storage_ok).then(|| "storage path is not writable".to_string()),
-        }],
+        status: report.status,
+        checks: report
+            .checks
+            .into_iter()
+            .map(|check| ReadyCheck {
+                name: check.name,
+                ok: check.ok,
+                message: check.message,
+            })
+            .collect(),
     })
 }
 
