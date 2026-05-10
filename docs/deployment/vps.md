@@ -20,10 +20,10 @@ Sensitive values, especially `DATABASE_URL`, must not be committed, printed in d
 3. Build and install the SvelteKit web service from `apps/web` as a separate Node service.
 4. Create `/var/lib/market-osource/storage` owned by `market`.
 5. Create `/etc/market-osource/market-osource.env` based on `.env.example`.
-6. Install `docs/deployment/systemd/market-osource.service` to `/etc/systemd/system/`.
-7. Add a separate web systemd unit before production. The web service should listen on loopback/internal networking only.
-8. Run `systemctl daemon-reload && systemctl enable --now market-osource`.
-9. Verify `/health`, `/ready`, and `/version` through the local reverse proxy.
+6. Install `docs/deployment/systemd/market-osource.service` and `docs/deployment/systemd/market-osource-web.service` to `/etc/systemd/system/`.
+7. Keep both app services on loopback/internal networking; expose only the reverse proxy/tunnel public endpoint.
+8. Run `systemctl daemon-reload && systemctl enable --now market-osource market-osource-web`.
+9. Verify `/health`, `/ready`, `/api/system/runtime`, and the install UI through the local reverse proxy.
 
 ## VPS service topology
 
@@ -54,3 +54,9 @@ Use `docker-compose.yml` for local VPS smoke testing. It models separate `backen
 - Use explicit `CORS_ALLOWED_ORIGINS`; never use wildcard origins for cookie-authenticated routes.
 - Payment proof storage must remain private and served only through backend RBAC routes in later phases.
 - Tunnel is opt-in and must route only the HTTP app, not PostgreSQL, debug ports, or sidecar internals.
+
+## Runtime status notes
+
+- `/api/system/runtime` reports backend readiness, install state, package registry counts, local storage path, desktop PostgreSQL sidecar detection, and tunnel default-off status.
+- Runtime status is read-only in the current Gate C slice. It must not start PostgreSQL, backend, or `cloudflared` processes.
+- The desktop shell reports the same default-off PostgreSQL/tunnel posture for operator visibility while real process supervision is implemented in a later Gate C slice.

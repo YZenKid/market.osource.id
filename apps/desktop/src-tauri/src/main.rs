@@ -1,21 +1,17 @@
 #[tauri::command]
 fn desktop_runtime_status() -> serde_json::Value {
+    let postgres = sidecar_postgres::default_desktop_status();
+    let tunnel = sidecar_cloudflared::default_tunnel_status();
+
     serde_json::json!({
-        "postgres": {
-            "bundled": true,
-            "bind": "127.0.0.1",
-            "running": false,
-            "note": "sidecar supervision is wired in later phases"
-        },
+        "postgres": postgres,
         "backend": {
             "running": false,
-            "note": "Axum process supervision is wired in later phases"
+            "bind": "127.0.0.1",
+            "note": "Axum process supervision is wired in a later Gate C slice"
         },
-        "tunnel": {
-            "enabled": false,
-            "running": false,
-            "note": "cloudflared is opt-in"
-        }
+        "tunnel": tunnel,
+        "note": "desktop status is read-only; no sidecar process is started by this command"
     })
 }
 

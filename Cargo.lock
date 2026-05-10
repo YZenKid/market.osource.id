@@ -481,6 +481,8 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "sidecar-cloudflared",
+ "sidecar-postgres",
  "tower-http",
  "tracing",
 ]
@@ -2169,6 +2171,8 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sidecar-cloudflared",
+ "sidecar-postgres",
  "tauri",
  "tauri-build",
  "tracing",

@@ -1,0 +1,24 @@
+[Unit]
+Description=market.osource.id SvelteKit web service
+After=network-online.target market-osource.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=market
+Group=market
+WorkingDirectory=/opt/market-osource/apps/web
+EnvironmentFile=/etc/market-osource/market-osource.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node build
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/market-osource
+
+[Install]
+WantedBy=multi-user.target
