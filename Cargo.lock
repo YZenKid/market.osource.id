@@ -473,10 +473,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "core-app",
+ "core-auth",
  "core-db",
  "core-installer",
  "core-packages",
  "core-runtime",
+ "secrecy",
  "serde",
  "serde_json",
  "tower-http",
@@ -520,10 +522,14 @@ name = "core-db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "secrecy",
+ "serde",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -581,6 +587,7 @@ name = "core-installer"
 version = "0.1.0"
 dependencies = [
  "core-runtime",
+ "secrecy",
  "serde",
  "thiserror 2.0.18",
 ]
