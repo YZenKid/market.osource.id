@@ -5,10 +5,35 @@ WORKDIR /workspace
 
 COPY Cargo.toml ./
 COPY apps/backend ./apps/backend
+# Keep Docker backend build independent from desktop toolchain packages:
+# include only minimal desktop crate files required for Cargo workspace resolution.
+COPY apps/desktop/src-tauri/Cargo.toml ./apps/desktop/src-tauri/Cargo.toml
+COPY apps/desktop/src-tauri/build.rs ./apps/desktop/src-tauri/build.rs
+COPY apps/desktop/src-tauri/src ./apps/desktop/src-tauri/src
 COPY crates ./crates
 COPY migrations ./migrations
 
 RUN cargo build --release --package market-backend
+
+FROM node:22-bookworm-slim AS web-builder
+WORKDIR /workspace/apps/web
+
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+
+COPY apps/web ./
+RUN npm run build
+
+FROM node:22-bookworm-slim AS web-runtime
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    PORT=3000
+
+COPY --from=web-builder /workspace/apps/web/build ./build
+
+EXPOSE 3000
+CMD ["node", "build"]
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \

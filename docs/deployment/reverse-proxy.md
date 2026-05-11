@@ -28,15 +28,15 @@ market.example.com {
   encode zstd gzip
 
   handle /api/* {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8301
   }
 
   handle /media/* {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:8301
   }
 
   handle {
-    reverse_proxy 127.0.0.1:3000
+    reverse_proxy 127.0.0.1:8300
   }
 }
 ```
@@ -49,21 +49,21 @@ server {
   server_name market.example.com;
 
   location /api/ {
-    proxy_pass http://127.0.0.1:8080;
+    proxy_pass http://127.0.0.1:8301;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   }
 
   location /media/ {
-    proxy_pass http://127.0.0.1:8080;
+    proxy_pass http://127.0.0.1:8301;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   }
 
   location / {
-    proxy_pass http://127.0.0.1:3000;
+    proxy_pass http://127.0.0.1:8300;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

@@ -11,6 +11,12 @@ pub struct InstallationStateRecord {
     pub locked: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct BootstrapInstallationRecord {
+    pub installation: InstallationStateRecord,
+    pub admin_user_id: uuid::Uuid,
+}
+
 #[derive(Debug, Clone)]
 pub struct BootstrapInstallInput {
     pub marketplace_name: String,
@@ -65,7 +71,7 @@ pub async fn get_installation_state(
 pub async fn bootstrap_installation(
     pool: &PgPool,
     input: BootstrapInstallInput,
-) -> Result<InstallationStateRecord, InstallRepositoryError> {
+) -> Result<BootstrapInstallationRecord, InstallRepositoryError> {
     let mut transaction = pool.begin().await?;
 
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
@@ -81,17 +87,18 @@ pub async fn bootstrap_installation(
         .fetch_one(&mut *transaction)
         .await?;
 
-    sqlx::query(
+    let admin_user_id: uuid::Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO users (role_id, name, email, password_hash, status)
         VALUES ($1, $2, lower($3), $4, 'active')
+        RETURNING id
         "#,
     )
     .bind(role_id)
     .bind(&input.admin_name)
     .bind(&input.admin_email)
     .bind(&input.admin_password_hash)
-    .execute(&mut *transaction)
+    .fetch_one(&mut *transaction)
     .await?;
 
     sqlx::query("DELETE FROM marketplace_settings")
@@ -142,12 +149,15 @@ pub async fn bootstrap_installation(
 
     transaction.commit().await?;
 
-    Ok(InstallationStateRecord {
-        state: row.get("state"),
-        runtime_mode: row.get("runtime_mode"),
-        core_version: row.get("core_version"),
-        installed: true,
-        locked: true,
+    Ok(BootstrapInstallationRecord {
+        installation: InstallationStateRecord {
+            state: row.get("state"),
+            runtime_mode: row.get("runtime_mode"),
+            core_version: row.get("core_version"),
+            installed: true,
+            locked: true,
+        },
+        admin_user_id,
     })
 }
 
@@ -195,7 +205,7 @@ mod tests {
 
         let input = BootstrapInstallInput {
             marketplace_name: "Market Test".to_string(),
-            base_url: "http://127.0.0.1:8080".to_string(),
+            base_url: "http://127.0.0.1:8301".to_string(),
             admin_name: "Admin".to_string(),
             admin_email: format!("admin-{}@example.com", uuid::Uuid::new_v4()),
             admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$fake$hash".to_string(),
@@ -207,7 +217,8 @@ mod tests {
         let record = bootstrap_installation(&pool, input.clone())
             .await
             .expect("first setup succeeds");
-        assert!(record.locked);
+        assert!(record.installation.locked);
+        assert_ne!(record.admin_user_id, uuid::Uuid::nil());
 
         let repeat = bootstrap_installation(&pool, input).await;
         assert!(matches!(repeat, Err(InstallRepositoryError::AlreadyLocked)));
@@ -229,7 +240,7 @@ mod tests {
 
         let first_input = BootstrapInstallInput {
             marketplace_name: "Market Test".to_string(),
-            base_url: "http://127.0.0.1:8080".to_string(),
+            base_url: "http://127.0.0.1:8301".to_string(),
             admin_name: "Admin One".to_string(),
             admin_email: format!("admin-one-{}@example.com", uuid::Uuid::new_v4()),
             admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$fake$hash".to_string(),

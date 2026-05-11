@@ -1,0 +1,54 @@
+name: release-foundation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  live-postgres-migrations:
+    name: live postgres migration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: market_osource_ci
+          POSTGRES_USER: market
+          POSTGRES_PASSWORD: market-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U market -d market_osource_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://market:market-ci@127.0.0.1:5432/market_osource_ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.88"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run ignored live migration tests
+        run: cargo test -p core-db -- --ignored
+
+  docker-build-smoke:
+    name: docker build smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend runtime image
+        run: docker build --tag market-osource-smoke:ci .

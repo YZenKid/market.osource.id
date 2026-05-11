@@ -36,9 +36,9 @@ Recommended public reverse proxy shape:
 
 ```txt
 https://market.example.com/
-  ├─ /api/*          -> Axum backend, e.g. 127.0.0.1:8080
-  ├─ /media/*        -> Axum protected media, e.g. 127.0.0.1:8080
-  └─ all app routes  -> SvelteKit web, e.g. 127.0.0.1:3000
+  ├─ /api/*          -> Axum backend, e.g. 127.0.0.1:8301
+  ├─ /media/*        -> Axum protected media, e.g. 127.0.0.1:8301
+  └─ all app routes  -> SvelteKit web, e.g. 127.0.0.1:8300
 ```
 
 Even when the reverse proxy presents one public origin, keep the backend CORS allowlist explicit for configured web/local origins. Never use wildcard CORS for cookie-authenticated routes.
@@ -46,6 +46,8 @@ Even when the reverse proxy presents one public origin, keep the backend CORS al
 ## Container sketch
 
 Use `docker-compose.yml` for local VPS smoke testing. It models separate `backend` and `web` services plus PostgreSQL. Replace default database password before production. Keep named volumes for PostgreSQL data and payment-proof/product media storage.
+
+The Compose `web` service is built from the repository `Dockerfile` (`web-runtime` target). Dependencies and SvelteKit build artifacts are baked into the image at build time; the container does not run `npm ci` at startup and does not require a writable source bind-mount. This avoids restart loops when source mounts are read-only.
 
 ## Security notes
 

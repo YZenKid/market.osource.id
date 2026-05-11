@@ -33,10 +33,10 @@ pub struct SafeAppConfig {
     pub runtime_mode: RuntimeMode,
     pub bind_addr: SocketAddr,
     pub base_url: String,
-    pub storage_path: String,
     pub cors_allowed_origins: Vec<String>,
     pub cookie_secure: bool,
     pub database_url_configured: bool,
+    pub storage_configured: bool,
 }
 
 impl AppConfig {
@@ -49,10 +49,10 @@ impl AppConfig {
             _ => RuntimeMode::Vps,
         };
         let bind_addr = std::env::var("BIND_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+            .unwrap_or_else(|_| "127.0.0.1:8301".to_string())
             .parse()?;
         let base_url =
-            std::env::var("BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_string());
+            std::env::var("BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8301".to_string());
         let database_url = SecretString::from(std::env::var("DATABASE_URL").unwrap_or_else(|_| {
             "postgres://market:market@127.0.0.1:5432/market_osource".to_string()
         }));
@@ -84,10 +84,10 @@ impl AppConfig {
             runtime_mode: self.runtime_mode,
             bind_addr: self.bind_addr,
             base_url: self.base_url.clone(),
-            storage_path: self.storage_path.clone(),
             cors_allowed_origins: self.cors_allowed_origins.clone(),
             cookie_secure: self.cookie_secure,
             database_url_configured: !self.database_url.expose_secret().is_empty(),
+            storage_configured: !self.storage_path.is_empty(),
         }
     }
 }

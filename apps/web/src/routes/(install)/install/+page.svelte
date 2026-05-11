@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { apiUrl } from '$lib/api/base';
+  import StateNotice from '$lib/ui/StateNotice.svelte';
+  import StatusBadge from '$lib/ui/StatusBadge.svelte';
 
   type InstallState = {
     state: string;
@@ -15,33 +18,54 @@
     checks: Array<{ name: string; ok: boolean; message: string | null }>;
   };
 
+  type SetupResponse = {
+    state: string;
+    locked: boolean;
+    authenticated?: boolean;
+  };
+
+  type SessionState = 'checking' | 'authenticated' | 'anonymous' | 'unavailable';
+
   let installState: InstallState | null = null;
   let preflight: PreflightReport | null = null;
   let loading = true;
   let submitting = false;
   let error = '';
   let success = '';
+  let sessionState: SessionState = 'checking';
 
   let marketplaceName = '';
   let adminName = '';
   let adminEmail = '';
   let adminPassword = '';
 
+  async function fetchCsrfToken() {
+    const response = await fetch(apiUrl('/api/auth/csrf'), { credentials: 'include' });
+    const payload = await response.json();
+    if (!response.ok || typeof payload.token !== 'string') {
+      throw new Error(payload.message ?? 'Gagal menyiapkan token keamanan.');
+    }
+    return payload.token;
+  }
+
   async function loadInstallStatus() {
     loading = true;
     error = '';
     try {
-      const [stateResponse, preflightResponse] = await Promise.all([
-        fetch('/api/install/state'),
-        fetch('/api/install/preflight')
+      const [stateResponse, preflightResponse, sessionResponse] = await Promise.all([
+        fetch(apiUrl('/api/install/state'), { credentials: 'include' }),
+        fetch(apiUrl('/api/install/preflight'), { credentials: 'include' }),
+        fetch(apiUrl('/api/admin/brands'), { credentials: 'include' })
       ]);
       if (!stateResponse.ok || !preflightResponse.ok) {
         throw new Error('Install API belum tersedia. Pastikan reverse proxy mengarahkan /api ke Axum.');
       }
       installState = await stateResponse.json();
       preflight = await preflightResponse.json();
+      sessionState = sessionResponse.ok ? 'authenticated' : sessionResponse.status === 401 || sessionResponse.status === 403 ? 'anonymous' : 'unavailable';
     } catch (loadError) {
       error = loadError instanceof Error ? loadError.message : 'Gagal memuat status install.';
+      sessionState = 'unavailable';
     } finally {
       loading = false;
     }
@@ -52,9 +76,11 @@
     error = '';
     success = '';
     try {
-      const response = await fetch('/api/install/setup', {
+      const csrfToken = await fetchCsrfToken();
+      const response = await fetch(apiUrl('/api/install/setup'), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
         body: JSON.stringify({
           marketplace_name: marketplaceName,
           admin_name: adminName,
@@ -62,11 +88,13 @@
           admin_password: adminPassword
         })
       });
-      const payload = await response.json();
+      const payload: SetupResponse & { message?: string } = await response.json();
       if (!response.ok) {
         throw new Error(payload.message ?? 'Setup gagal.');
       }
-      success = 'Setup berhasil dan install panel sudah dikunci server-side.';
+      success = payload.authenticated
+        ? 'Setup berhasil, install panel terkunci, dan sesi Super Admin sudah aktif.'
+        : 'Setup berhasil dan install panel sudah dikunci server-side.';
       adminPassword = '';
       await loadInstallStatus();
     } catch (submitError) {
@@ -96,12 +124,17 @@
 <main class="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-4 py-8">
   <section class="panel overflow-hidden">
     <div class="border-b border-border bg-muted/60 p-6">
-      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Install panel</p>
-      <h1 class="mt-2 text-3xl font-bold tracking-tight">Setup marketplace pertama</h1>
-      <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Panel ini membuat Super Admin pertama dan mengunci setup server-side setelah berhasil.
-      </p>
-    </div>
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Install panel</p>
+            <h1 class="mt-2 text-3xl font-bold tracking-tight">Setup marketplace pertama</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Panel ini membuat Super Admin pertama, memakai CSRF untuk setup mutation, dan mengunci setup server-side setelah berhasil.
+            </p>
+          </div>
+          <StatusBadge tone={sessionState === 'authenticated' ? 'success' : sessionState === 'checking' ? 'neutral' : 'warning'} label={sessionState === 'authenticated' ? 'Admin session active' : sessionState === 'checking' ? 'Checking session' : 'No admin session'} />
+        </div>
+      </div>
 
     <div class="grid gap-6 p-6 md:grid-cols-[1fr_300px]">
       <form class="space-y-5" aria-label="Install setup form" on:submit|preventDefault={submitSetup}>
@@ -118,9 +151,11 @@
         {/if}
 
         {#if installState?.locked}
-          <div class="rounded-xl border border-success/30 bg-success/10 p-4 text-sm text-success" role="status">
-            Install sudah terkunci. Setup ulang ditolak oleh backend.
-          </div>
+          <StateNotice tone="success" title="Install sudah terkunci" message="Setup ulang ditolak oleh backend. Gunakan sesi Super Admin yang dibuat saat setup untuk membuka admin dashboard." actionHref="/admin" actionLabel="Buka admin" />
+        {/if}
+
+        {#if !installState?.locked && sessionState === 'anonymous'}
+          <StateNotice tone="warning" title="Belum ada sesi admin" message="Setup yang berhasil akan membuat sesi Super Admin jika backend mengembalikan cookie market_session." />
         {/if}
 
         <label class="block text-sm font-medium">
@@ -150,20 +185,22 @@
         <dl class="mt-4 space-y-3 text-sm">
           <div class="flex items-center justify-between gap-3">
             <dt>Install state</dt>
-            <dd class="status-chip border-primary/30 bg-primary/10 text-primary">{installState?.state ?? 'loading'}</dd>
+            <dd><StatusBadge tone="primary" label={installState?.state ?? 'loading'} /></dd>
           </div>
           <div class="flex items-center justify-between gap-3">
             <dt>Lock</dt>
-            <dd class={`status-chip ${installState?.locked ? 'border-success/30 bg-success/10 text-success' : 'border-warning/30 bg-warning/10 text-warning'}`}>{installState?.locked ? 'Locked' : 'Open'}</dd>
+            <dd><StatusBadge tone={installState?.locked ? 'success' : 'warning'} label={installState?.locked ? 'Locked' : 'Open'} /></dd>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <dt>Admin session</dt>
+            <dd><StatusBadge tone={sessionState === 'authenticated' ? 'success' : 'warning'} label={sessionState === 'authenticated' ? 'Authenticated' : 'Required'} /></dd>
           </div>
         </dl>
         <ul class="mt-5 space-y-3 text-sm">
           {#each preflight?.checks ?? [] as check}
             <li class="flex items-center justify-between gap-3">
               <span>{check.name.replaceAll('_', ' ')}</span>
-              <span class={`status-chip ${check.ok ? 'border-success bg-success/10 text-success' : 'border-destructive bg-destructive/10 text-destructive'}`} title={check.message ?? ''}>
-                {check.ok ? 'Ready' : 'Blocked'}
-              </span>
+              <StatusBadge tone={check.ok ? 'success' : 'destructive'} label={check.ok ? 'Ready' : 'Blocked'} />
             </li>
           {/each}
         </ul>

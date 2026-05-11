@@ -25,6 +25,8 @@ erDiagram
   users ||--o{ brand_members : assigned
   users ||--o{ audit_events : acts
   users ||--o{ payment_proofs : uploads
+  brand_members ||--o{ brand_member_permissions : grants
+  permissions ||--o{ brand_member_permissions : defines
 
   roles ||--o{ users : grants
 
@@ -102,6 +104,19 @@ erDiagram
     uuid brand_id FK
     uuid user_id FK
     text member_role
+    timestamptz created_at
+  }
+
+  permissions {
+    text code PK
+    text description
+    timestamptz created_at
+  }
+
+  brand_member_permissions {
+    uuid brand_member_id PK,FK
+    text permission_code PK,FK
+    uuid granted_by_user_id FK
     timestamptz created_at
   }
 
@@ -499,5 +514,6 @@ Rekomendasi:
 - Bagaimana constraint/index untuk menandai satu payment proof aktif per order di UI MVP tanpa menghapus histori multi-proof?
 - Payment proof file access matrix sudah dikunci: Super Admin dapat melihat semua proof; seller default hanya melihat status pembayaran/order brand assigned; seller dengan permission eksplisit hanya dapat melihat proof untuk order/brand assigned dan akses harus diaudit.
 - Permission payment proof canonical: `payment_proof.view_assigned`, `payment_proof.verify`, dan `payment_proof.reject`. `payment_proof.view_assigned` wajib brand/order-scoped; semua akses file proof dicatat di `audit_events`.
+- Gate F foundation menyimpan grant eksplisit seller di `brand_member_permissions` agar default seller tetap tidak dapat membaca file proof. Scope tetap brand/order-scoped melalui `brand_members` + `order_brand_groups`.
 - Apakah category wajib scoped per brand atau ada global marketplace category pada fase lanjut?
 - Product price MVP sudah dikunci variant-only; produk sederhana memakai default/internal variant. Pertanyaan tersisa hanya detail constraint/UX default variant.

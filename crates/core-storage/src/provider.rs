@@ -19,6 +19,13 @@ pub struct StoredObject {
     pub visibility: FileVisibility,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadObject {
+    pub bucket: String,
+    pub object_key: String,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileVisibility {
@@ -30,6 +37,8 @@ pub enum FileVisibility {
 #[async_trait]
 pub trait StorageProvider: Send + Sync {
     async fn put_object(&self, input: PutObjectInput) -> Result<StoredObject, StorageError>;
+    async fn read_object(&self, bucket: &str, object_key: &str)
+        -> Result<ReadObject, StorageError>;
     async fn delete_object(&self, bucket: &str, object_key: &str) -> Result<(), StorageError>;
 }
 

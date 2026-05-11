@@ -1,8 +1,14 @@
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct FeatureGate {
     enabled: HashSet<String>,
+}
+
+impl Default for FeatureGate {
+    fn default() -> Self {
+        Self::new(crate::base_capabilities())
+    }
 }
 
 impl FeatureGate {
@@ -24,6 +30,19 @@ impl FeatureGate {
         self.is_enabled(capability)
             .then_some(())
             .ok_or_else(|| FeatureGateError::Disabled(capability.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_gate_allows_base_capabilities_only() {
+        let gate = FeatureGate::default();
+
+        assert!(gate.require("core.catalog.basic").is_ok());
+        assert!(gate.require("promo.voucher").is_err());
     }
 }
 

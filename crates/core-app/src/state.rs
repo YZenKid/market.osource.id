@@ -11,6 +11,7 @@ pub struct AppState {
     pub storage: Arc<LocalStorageProvider>,
     pub package_gate: Arc<core_packages::FeatureGate>,
     pub package_registry: Arc<Vec<core_packages::PackageDefinition>>,
+    pub rate_limiter: Arc<core_auth::InMemoryRateLimiter>,
     pub started_at: std::time::SystemTime,
 }
 
@@ -25,7 +26,7 @@ mod tests {
         AppConfig {
             runtime_mode: core_runtime::RuntimeMode::Vps,
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
-            base_url: "http://127.0.0.1:8080".to_string(),
+            base_url: "http://127.0.0.1:8301".to_string(),
             database_url: SecretString::from("".to_string()),
             storage_path,
             cors_allowed_origins: vec!["http://127.0.0.1:5173".to_string()],
@@ -80,6 +81,7 @@ impl AppState {
             storage,
             package_gate: Arc::new(core_packages::FeatureGate::default()),
             package_registry,
+            rate_limiter: Arc::new(core_auth::InMemoryRateLimiter::default()),
             started_at: std::time::SystemTime::now(),
         }
     }
@@ -87,7 +89,34 @@ impl AppState {
     pub async fn try_connect_db(mut self) -> Self {
         if !self.config.database_url.expose_secret().is_empty() {
             match core_db::connect(&self.config.database_url).await {
-                Ok(pool) => self.db_pool = Some(pool),
+                Ok(pool) => {
+                    tracing::info!("database connected during startup; attempting core migrations");
+                    match core_db::run_core_migrations(&pool).await {
+                        Ok(()) => {
+                            tracing::info!("core migrations completed during startup");
+                            match core_db::run_package_migrations(&pool).await {
+                                Ok(()) => {
+                                    tracing::info!(
+                                        "package migrations completed during startup"
+                                    );
+                                }
+                                Err(error) => {
+                                    tracing::warn!(
+                                        error = %error,
+                                        "package migrations failed during startup; readiness may remain not_ready"
+                                    );
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                error = %error,
+                                "core migrations failed during startup; readiness may remain not_ready"
+                            );
+                        }
+                    }
+                    self.db_pool = Some(pool)
+                }
                 Err(error) => {
                     tracing::warn!(error = %error, "database connection unavailable during startup")
                 }

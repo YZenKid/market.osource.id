@@ -521,8 +521,8 @@ Playwright evidence must use wait-stabilize-scroll-settle workflow and matching 
 ```bash
 docker build -t market-osource:local .
 docker compose up --build
-curl -f http://localhost:8080/health
-curl -f http://localhost:8080/ready
+curl -f http://localhost:8301/health
+curl -f http://localhost:8301/ready
 ```
 
 Update commands once separate `backend` and `web` services are finalized.

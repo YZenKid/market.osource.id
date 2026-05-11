@@ -472,19 +472,26 @@ name = "core-api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "core-app",
  "core-auth",
  "core-db",
  "core-installer",
  "core-packages",
  "core-runtime",
+ "core-storage",
+ "http",
  "secrecy",
  "serde",
  "serde_json",
  "sidecar-cloudflared",
  "sidecar-postgres",
+ "sqlx",
+ "tokio",
+ "tower",
  "tower-http",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -512,9 +519,11 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "base64 0.22.1",
+ "hex",
  "rand",
  "secrecy",
  "serde",
+ "sha2",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -525,8 +534,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "core-packages",
  "secrecy",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",

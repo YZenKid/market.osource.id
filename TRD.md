@@ -391,6 +391,8 @@ Permission payment proof canonical:
 
 Super Admin memiliki seluruh permission di atas. Seller default tidak memiliki `payment_proof.view_assigned` dan hanya melihat status pembayaran/order brand assigned.
 
+Gate F foundation stores these explicit seller grants in `brand_member_permissions`, keyed by brand membership plus permission code. This is intentionally least-invasive and deny-by-default: no seller receives payment proof file access unless a brand membership row is explicitly granted `payment_proof.view_assigned`, and access must still match an order that contains that assigned brand. Super Admin bypasses these grants for proof media and decision endpoints, while seller verify/reject is allowed only when assigned brand/order scope matches and the corresponding seeded permission (`payment_proof.verify` or `payment_proof.reject`) exists.
+
 ### 7.6 `core-storage`
 
 Berisi trait storage dan adapter.
@@ -1023,6 +1025,8 @@ Rules:
 
 Payment proof tidak boleh diserve sebagai static public file. Akses harus melalui route yang melakukan authorization.
 
+Gate F protected media foundation uses `/media/:file_id` for private payment proof reads. Guests/customer tracking-token media reads are intentionally denied until a separate token-scoped media policy is designed. Seller reads require both assigned brand/order scope and `payment_proof.view_assigned`; allowed and denied reads are written to `audit_events`.
+
 ## 17. Checkout & Payment Manual
 
 ### 17.1 Checkout Flow
@@ -1049,6 +1053,8 @@ Payment proof tidak boleh diserve sebagai static public file. Akses harus melalu
 6. order.payment_status = waiting_payment_verification
 7. Audit event dicatat
 ```
+
+Upload endpoint foundation: `POST /api/storefront/orders/:tracking_token/payment-proof` accepts multipart field `file`, stores objects under the private `payment-proofs` bucket with generated object keys, creates `file_objects` + `payment_proofs`, and moves `orders.payment_status` to `waiting_payment_verification`. The current global Axum body limit is raised from 2MiB to `MAX_UPLOAD_BYTES + 64KiB` so 5MiB proof files can pass multipart framing; a later hardening pass should split route-specific body limits so non-upload routes keep the smaller cap.
 
 ### 17.3 Verification
 

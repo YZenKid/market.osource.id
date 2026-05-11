@@ -1,6 +1,7 @@
 use core_api::app_router;
 use core_app::AppState;
 use core_runtime::AppConfig;
+use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -21,6 +22,10 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(bind_addr).await?;
 
     tracing::info!(%bind_addr, "market backend listening");
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }

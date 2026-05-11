@@ -8,8 +8,40 @@ pub struct PackageDefinition {
     pub paid: bool,
 }
 
+impl PackageDefinition {
+    pub fn default_version(&self) -> &'static str {
+        "0.1.0"
+    }
+
+    pub fn default_core_version_range(&self) -> &'static str {
+        ">=0.1.0 <0.2.0"
+    }
+
+    pub fn default_license_status(&self) -> &'static str {
+        if self.paid {
+            "unlicensed"
+        } else {
+            "base"
+        }
+    }
+
+    pub fn default_enabled(&self) -> bool {
+        !self.paid
+    }
+}
+
 pub fn base_registry() -> Vec<PackageDefinition> {
     vec![
+        PackageDefinition {
+            package_id: "base".to_string(),
+            name: "Base Open Source".to_string(),
+            capabilities: vec![
+                "core.catalog.basic".to_string(),
+                "core.checkout.manual_transfer".to_string(),
+                "core.storage.local".to_string(),
+            ],
+            paid: false,
+        },
         PackageDefinition {
             package_id: "promo".to_string(),
             name: "Promo Package".to_string(),
@@ -34,6 +66,15 @@ pub fn base_registry() -> Vec<PackageDefinition> {
 pub fn base_capabilities() -> Vec<String> {
     base_registry()
         .into_iter()
+        .filter(|package| !package.paid)
+        .flat_map(|package| package.capabilities)
+        .collect()
+}
+
+pub fn paid_capabilities() -> Vec<String> {
+    base_registry()
+        .into_iter()
+        .filter(|package| package.paid)
         .flat_map(|package| package.capabilities)
         .collect()
 }
