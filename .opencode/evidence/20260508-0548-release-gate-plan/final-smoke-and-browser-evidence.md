@@ -22,8 +22,9 @@ This evidence records the final environment-facing checks performed after the bo
 | `docker compose exec -T postgres psql -U market -d market_osource -c "\\dt"` | Passed | Core tables, package tables, permission tables, and audit/payment/order tables exist after startup migration bootstrap. |
 | `python -c "urllib.request.urlopen('http://127.0.0.1:8300/')..."` | Passed | Storefront/admin shell homepage responds and contains `market.osource.id` on the current published web port. |
 | Split-origin install/admin/storefront API smoke from `8300` to `8301` | Passed | CSRF token, setup session cookie, `auth/me`, admin reads, runtime read, and storefront reads all reached backend successfully across explicit credentialed CORS. |
-| `playwright_browser_navigate` to `http://127.0.0.1:8300/` | Blocked by environment | Browser runtime requires Chrome/Chromium at `/opt/google/chrome/chrome`. |
-| `npx playwright install chrome` | Blocked by environment | Attempt required privileged install path / interactive sudo password and could not complete. |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/opencode/pw-browsers npx playwright install chromium` | Passed | Chromium, headless shell, and ffmpeg downloaded into user-space without privileged system install. |
+| Temp Playwright package launch against `http://127.0.0.1:8300/` | Passed | Verified user-space Chromium launch from `/tmp/opencode` and page title `market.osource.id`. |
+| Browser screenshot capture for `8300` routes | Passed | Captured screenshots for home, install, admin dashboard, storefront, and checkout pages into the evidence folder. |
 
 ## Key Observations
 
@@ -42,19 +43,25 @@ This evidence records the final environment-facing checks performed after the bo
 - `GET /api/auth/me`, `GET /api/admin/brands`, `GET /api/admin/products`, `GET /api/admin/packages`, `GET /api/system/runtime`, and `GET /api/storefront/products` all succeeded through the split-origin path after setup.
 - `POST /api/storefront/checkout` with a valid payload shape and empty `items` reached backend successfully and returned the expected business validation error `checkout requires at least one item`, confirming error responses also preserve the required CORS headers.
 
-### Browser evidence blocker
+### Browser evidence workaround
 
-Playwright screenshot/browser evidence is still blocked by environment constraints:
+System Chrome/Chromium binaries were not preinstalled, and the Playwright MCP runtime expected Chrome at `/opt/google/chrome/chrome`. Instead of requiring privileged system install, browser evidence was recovered with a user-space strategy:
 
-- no `google-chrome`, `chromium`, or `chromium-browser` binary is installed,
-- Playwright browser MCP expects Chrome at `/opt/google/chrome/chrome`,
-- local install attempt via `npx playwright install chrome` required privileged system changes and failed because sudo/password interaction is unavailable in this environment.
+1. create a temporary npm workspace under `/tmp/opencode`,
+2. install the `playwright` package there,
+3. download Chromium into `/tmp/opencode/pw-browsers` using `PLAYWRIGHT_BROWSERS_PATH`,
+4. run headless browser captures against the live `8300/8301` stack from that temporary workspace.
 
-This means visual screenshot evidence cannot be produced from the current environment without:
+Generated browser evidence:
 
-1. a preinstalled Chrome/Chromium runtime, or
-2. explicit privileged install capability for Playwright browser runtime.
+- `browser/home-8300.png`
+- `browser/install-8300.png`
+- `browser/admin-dashboard-8300.png`
+- `browser/storefront-8300.png`
+- `browser/checkout-8300.png`
+- `browser/browser-evidence.json`
+- `browser/storage-state.json` (cookie names/attributes only; token values redacted before storing in repo evidence)
 
 ## Remaining Environment Blocker
 
-The primary remaining blocker is now **environmental browser runtime availability for visual evidence**, not core application implementation.
+No hard blocker remains for basic browser evidence capture using the user-space Playwright runtime strategy above. The main remaining gap is that richer UI validation workflows through the MCP-hosted browser toolchain may still expect a system Chrome path unless similarly redirected or provisioned.

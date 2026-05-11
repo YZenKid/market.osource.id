@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "market_csrf",
+      "value": "<redacted-csrf-token>",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1779093619.729,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "market_session",
+      "value": "<redacted-session-token>",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1779093619.774,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

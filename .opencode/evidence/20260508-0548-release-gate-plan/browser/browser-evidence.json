@@ -1,0 +1,32 @@
+[
+  {
+    "name": "home-8300",
+    "url": "http://127.0.0.1:8300/",
+    "title": "market.osource.id",
+    "file": "/var/home/ujang/Project/Personal/market.osource.id/.opencode/evidence/20260508-0548-release-gate-plan/browser/home-8300.png"
+  },
+  {
+    "name": "install-8300",
+    "url": "http://127.0.0.1:8300/install",
+    "title": "Install Panel — market.osource.id",
+    "file": "/var/home/ujang/Project/Personal/market.osource.id/.opencode/evidence/20260508-0548-release-gate-plan/browser/install-8300.png"
+  },
+  {
+    "name": "admin-dashboard-8300",
+    "url": "http://127.0.0.1:8300/admin",
+    "title": "Admin Dashboard — market.osource.id",
+    "file": "/var/home/ujang/Project/Personal/market.osource.id/.opencode/evidence/20260508-0548-release-gate-plan/browser/admin-dashboard-8300.png"
+  },
+  {
+    "name": "storefront-8300",
+    "url": "http://127.0.0.1:8300/store",
+    "title": "Storefront — market.osource.id",
+    "file": "/var/home/ujang/Project/Personal/market.osource.id/.opencode/evidence/20260508-0548-release-gate-plan/browser/storefront-8300.png"
+  },
+  {
+    "name": "checkout-8300",
+    "url": "http://127.0.0.1:8300/store/checkout",
+    "title": "Checkout — Storefront",
+    "file": "/var/home/ujang/Project/Personal/market.osource.id/.opencode/evidence/20260508-0548-release-gate-plan/browser/checkout-8300.png"
+  }
+]
