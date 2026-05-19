@@ -6,7 +6,7 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-${DIST_DIR}/release-evidence}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUTPUT_DIR="${OUTPUT_ROOT}/closeout-${STAMP}"
 SMOKE_MODE="${SMOKE_MODE:-none}"
-BASE_URL="${BASE_URL:-http://127.0.0.1:8301}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:7301}"
 
 mkdir -p "${OUTPUT_DIR}"
 

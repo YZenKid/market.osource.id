@@ -3,8 +3,8 @@ set -eu
 
 COMPOSE_BIN="${COMPOSE_BIN:-docker compose}"
 CURL_BIN="${CURL_BIN:-curl}"
-BASE_URL="${BASE_URL:-http://127.0.0.1:8301}"
-WEB_URL="${WEB_URL:-http://127.0.0.1:8300/}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:7301}"
+WEB_URL="${WEB_URL:-http://127.0.0.1:7300/}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-dist/release-evidence}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUTPUT_DIR="${OUTPUT_ROOT}/compose-smoke-${STAMP}"

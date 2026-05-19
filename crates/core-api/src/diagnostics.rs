@@ -256,12 +256,12 @@ mod tests {
         AppState::new(AppConfig {
             runtime_mode: RuntimeMode::Vps,
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
-            base_url: "http://127.0.0.1:8301".to_string(),
+            base_url: "http://127.0.0.1:7301".to_string(),
             database_url: SecretString::from(
                 "postgres://secret-user:top-secret@127.0.0.1:5432/market".to_string(),
             ),
             storage_path: "/srv/market/private-storage".to_string(),
-            cors_allowed_origins: vec!["http://127.0.0.1:8300".to_string()],
+            cors_allowed_origins: vec!["http://127.0.0.1:7300".to_string()],
             cookie_secure: false,
         })
     }

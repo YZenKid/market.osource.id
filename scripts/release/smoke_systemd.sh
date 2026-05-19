@@ -3,8 +3,8 @@ set -eu
 
 SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
 CURL_BIN="${CURL_BIN:-curl}"
-BASE_URL="${BASE_URL:-http://127.0.0.1:8301}"
-WEB_URL="${WEB_URL:-http://127.0.0.1:8300/}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:7301}"
+WEB_URL="${WEB_URL:-http://127.0.0.1:7300/}"
 BACKEND_SERVICE="${BACKEND_SERVICE:-market-osource}"
 WEB_SERVICE="${WEB_SERVICE:-market-osource-web}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-dist/release-evidence}"

@@ -49,10 +49,10 @@ impl AppConfig {
             _ => RuntimeMode::Vps,
         };
         let bind_addr = std::env::var("BIND_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:8301".to_string())
+            .unwrap_or_else(|_| "127.0.0.1:7301".to_string())
             .parse()?;
         let base_url =
-            std::env::var("BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:8301".to_string());
+            std::env::var("BASE_URL").unwrap_or_else(|_| "http://127.0.0.1:7301".to_string());
         let database_url = SecretString::from(std::env::var("DATABASE_URL").unwrap_or_else(|_| {
             "postgres://market:market@127.0.0.1:5432/market_osource".to_string()
         }));

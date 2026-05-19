@@ -205,7 +205,7 @@ mod tests {
 
         let input = BootstrapInstallInput {
             marketplace_name: "Market Test".to_string(),
-            base_url: "http://127.0.0.1:8301".to_string(),
+            base_url: "http://127.0.0.1:7301".to_string(),
             admin_name: "Admin".to_string(),
             admin_email: format!("admin-{}@example.com", uuid::Uuid::new_v4()),
             admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$fake$hash".to_string(),
@@ -240,7 +240,7 @@ mod tests {
 
         let first_input = BootstrapInstallInput {
             marketplace_name: "Market Test".to_string(),
-            base_url: "http://127.0.0.1:8301".to_string(),
+            base_url: "http://127.0.0.1:7301".to_string(),
             admin_name: "Admin One".to_string(),
             admin_email: format!("admin-one-{}@example.com", uuid::Uuid::new_v4()),
             admin_password_hash: "$argon2id$v=19$m=19456,t=2,p=1$fake$hash".to_string(),

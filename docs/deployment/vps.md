@@ -28,7 +28,7 @@ Sensitive values, especially `DATABASE_URL`, must not be committed, printed in d
 Untuk verification yang konsisten antar lane, gunakan juga helper runtime contract:
 
 ```bash
-BASE_URL=http://127.0.0.1:8301 ./scripts/release/verify_runtime_contract.sh
+BASE_URL=http://127.0.0.1:7301 ./scripts/release/verify_runtime_contract.sh
 ```
 
 `/health` adalah liveness probe, sedangkan `/ready` adalah readiness probe yang boleh bernilai `not_ready` pada fresh install sebelum lock/setup selesai.
@@ -37,10 +37,10 @@ Untuk lane executable smoke, gunakan helper berikut:
 
 ```bash
 # systemd lane
-BASE_URL=http://127.0.0.1:8301 WEB_URL=http://127.0.0.1:8300/ ./scripts/release/smoke_systemd.sh
+BASE_URL=http://127.0.0.1:7301 WEB_URL=http://127.0.0.1:7300/ ./scripts/release/smoke_systemd.sh
 
 # compose lane, non-destructive by default
-BASE_URL=http://127.0.0.1:8301 WEB_URL=http://127.0.0.1:8300/ ./scripts/release/smoke_compose.sh
+BASE_URL=http://127.0.0.1:7301 WEB_URL=http://127.0.0.1:7300/ ./scripts/release/smoke_compose.sh
 ```
 
 ## VPS service topology
@@ -54,9 +54,9 @@ Recommended public reverse proxy shape:
 
 ```txt
 https://market.example.com/
-  ├─ /api/*          -> Axum backend, e.g. 127.0.0.1:8301
-  ├─ /media/*        -> Axum protected media, e.g. 127.0.0.1:8301
-  └─ all app routes  -> SvelteKit web, e.g. 127.0.0.1:8300
+  ├─ /api/*          -> Axum backend, e.g. 127.0.0.1:7301
+  ├─ /media/*        -> Axum protected media, e.g. 127.0.0.1:7301
+  └─ all app routes  -> SvelteKit web, e.g. 127.0.0.1:7300
 ```
 
 Even when the reverse proxy presents one public origin, keep the backend CORS allowlist explicit for configured web/local origins. Never use wildcard CORS for cookie-authenticated routes.

@@ -26,7 +26,7 @@ mod tests {
         AppConfig {
             runtime_mode: core_runtime::RuntimeMode::Vps,
             bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
-            base_url: "http://127.0.0.1:8301".to_string(),
+            base_url: "http://127.0.0.1:7301".to_string(),
             database_url: SecretString::from("".to_string()),
             storage_path,
             cors_allowed_origins: vec!["http://127.0.0.1:5173".to_string()],

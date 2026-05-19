@@ -45,7 +45,7 @@ impl BackendSupervisor {
         let args = env::var("DESKTOP_BACKEND_ARGS")
             .map(|raw| raw.split_whitespace().map(ToString::to_string).collect())
             .unwrap_or_default();
-        let bind = env::var("DESKTOP_BACKEND_BIND").unwrap_or_else(|_| "127.0.0.1:8301".to_string());
+        let bind = env::var("DESKTOP_BACKEND_BIND").unwrap_or_else(|_| "127.0.0.1:7301".to_string());
         let workdir = env::var_os("DESKTOP_BACKEND_WORKDIR").map(PathBuf::from);
         let available = sidecar_postgres::binary_available(&command);
         let state = if available {

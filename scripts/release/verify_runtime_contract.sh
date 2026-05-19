@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-BASE_URL="${BASE_URL:-http://127.0.0.1:8301}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:7301}"
 CURL_BIN="${CURL_BIN:-curl}"
 
 health_json="$(${CURL_BIN} --fail --silent "${BASE_URL}/health")"

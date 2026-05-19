@@ -92,7 +92,7 @@ Template siap pakai tersedia di `docs/release/release-notes-template.md`.
 Sebelum artifact dinyatakan layak untuk lane systemd/container/desktop-adjacent smoke, catat hasil minimal dari:
 
 ```bash
-BASE_URL=http://127.0.0.1:8301 ./scripts/release/verify_runtime_contract.sh
+BASE_URL=http://127.0.0.1:7301 ./scripts/release/verify_runtime_contract.sh
 ```
 
 Helper ini memverifikasi bahwa:
