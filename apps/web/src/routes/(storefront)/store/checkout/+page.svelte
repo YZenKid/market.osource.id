@@ -4,11 +4,15 @@
   import { cart, type CartItem } from '$lib/stores/cart';
   import StoreShell from '$lib/ui/StoreShell.svelte';
   import StateNotice from '$lib/ui/StateNotice.svelte';
+  import FormSection from '$lib/ui/forms/FormSection.svelte';
+  import InputField from '$lib/ui/forms/InputField.svelte';
+  import SubmitButton from '$lib/ui/forms/SubmitButton.svelte';
 
   let items: CartItem[] = [];
   let customerName = '';
   let customerContact = '';
   let shippingAddress = '';
+  let note = '';
   let submitting = false;
   let error = '';
   let success = '';
@@ -19,8 +23,7 @@
     items = value;
   });
 
-  const total = (entries: CartItem[]) =>
-    entries.reduce((sum, item) => sum + Number(item.price ?? 0) * item.quantity, 0);
+  const total = (entries: CartItem[]) => entries.reduce((sum, item) => sum + Number(item.price ?? 0) * item.quantity, 0);
 
   async function submitCheckout() {
     submitting = true;
@@ -36,11 +39,8 @@
         body: JSON.stringify({
           customer_name: customerName,
           customer_contact: customerContact,
-          shipping_address: shippingAddress,
-          items: items.map((item) => ({
-            variant_id: item.variantId,
-            quantity: item.quantity
-          }))
+          shipping_address: note ? `${shippingAddress}\n\nCatatan:\n${note}` : shippingAddress,
+          items: items.map((item) => ({ variant_id: item.variantId, quantity: item.quantity }))
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -48,7 +48,7 @@
       trackingToken = payload.order?.public_tracking_token ?? '';
       orderNumber = payload.order?.order_number ?? '';
       success = 'Order berhasil dibuat. Simpan nomor order dan lanjutkan ke pelacakan order untuk upload bukti pembayaran private.';
-      // Clear backend cart, then reset local store only if backend clear succeeded.
+
       const clearRes = await fetch(apiUrl('/api/storefront/cart'), {
         method: 'DELETE',
         credentials: 'include'
@@ -56,7 +56,6 @@
       if (clearRes?.ok) {
         cart.clear();
       } else {
-        // Backend clear failed — re-hydrate so local state matches backend truth.
         await cart.hydrate();
       }
     } catch (checkoutError) {
@@ -75,72 +74,71 @@
 <svelte:head><title>Checkout — Storefront</title></svelte:head>
 
 <StoreShell active="checkout">
-  <div class="mx-auto grid max-w-5xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[1fr_340px] lg:px-8">
-    <section class="panel p-6">
-      <p class="eyebrow">Checkout foundation</p>
-      <h1 class="mt-2 text-2xl font-bold">Manual transfer checkout</h1>
-      <p class="mt-2 text-sm leading-6 text-muted-foreground">Form ini mengirim variant IDs dan quantity nyata dari cart browser ke backend checkout. Backend akan membuat satu order lintas brand dengan `order_brand_groups` dan tracking token publik.</p>
+  <div class="mx-auto grid max-w-6xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[1fr_400px] lg:px-8">
+    <section class="space-y-6">
+      <div class="panel p-6">
+        <p class="eyebrow">Checkout</p>
+        <h1 class="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Selesaikan order manual transfer</h1>
+        <p class="mt-2 text-sm leading-6 text-muted-foreground">Isi data pengiriman dan backend akan membuat satu order dengan tracking token publik. Upload bukti transfer dilakukan di halaman tracking, bukan di checkout.</p>
+      </div>
 
-      <form class="mt-6 space-y-5" aria-label="Checkout form" on:submit|preventDefault={submitCheckout}>
-        {#if error}<StateNotice tone="destructive" title="Checkout belum selesai" message={error} />{/if}
-        {#if success}<StateNotice tone="success" title="Checkout berhasil" message={success} actionHref={trackingToken ? `/store/orders/${trackingToken}` : undefined} actionLabel={trackingToken ? 'Buka pelacakan order' : undefined} />{/if}
-        {#if items.length === 0}
-          <StateNotice tone="warning" title="Cart kosong" message="Tambahkan produk dari storefront sebelum checkout. Backend akan menolak empty checkout sebagai boundary aman." actionHref="/store" actionLabel="Kembali ke katalog" />
-        {/if}
-        <div class="panel bg-background p-5">
-          <div class="section-heading">
-            <div>
-              <h2 class="text-lg font-semibold">Informasi penerima</h2>
-              <p class="text-sm text-muted-foreground">Dipakai sebagai snapshot order saat checkout berhasil.</p>
-            </div>
-            <StateNotice tone="neutral" title="Step 1" message="Isi data customer dengan jelas." />
-          </div>
-          <div class="field-grid mt-4">
-            <label class="block text-sm font-medium">
-              Nama penerima
-              <input class="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-3" bind:value={customerName} required autocomplete="name" />
-            </label>
-            <label class="block text-sm font-medium">
-              Kontak
-              <input class="mt-2 w-full rounded-xl border border-border bg-surface px-3 py-3" bind:value={customerContact} required autocomplete="tel" />
-            </label>
-          </div>
-        </div>
+      {#if error}<StateNotice tone="destructive" title="Checkout belum selesai" message={error} />{/if}
+      {#if success}<StateNotice tone="success" title="Checkout berhasil" message={success} actionHref={trackingToken ? `/store/orders/${trackingToken}` : undefined} actionLabel={trackingToken ? 'Buka pelacakan order' : undefined} />{/if}
+      {#if items.length === 0}
+        <StateNotice tone="warning" title="Cart kosong" message="Tambahkan produk dari storefront sebelum checkout." actionHref="/store" actionLabel="Kembali ke katalog" />
+      {/if}
 
-        <div class="panel bg-background p-5">
-          <div class="section-heading">
-            <div>
-              <h2 class="text-lg font-semibold">Alamat pengiriman</h2>
-              <p class="text-sm text-muted-foreground">Alamat ini ikut tersimpan sebagai snapshot order untuk fulfillment lintas brand.</p>
-            </div>
-            <StateNotice tone="neutral" title="Step 2" message="Pastikan alamat lengkap dan mudah diverifikasi seller." />
+      <form class="space-y-6" aria-label="Checkout form" on:submit|preventDefault={submitCheckout}>
+        <FormSection title="Informasi penerima" description="Dipakai sebagai snapshot order saat checkout berhasil." eyebrow="Step 1">
+          <div class="field-grid">
+            <InputField id="customer-name" label="Nama penerima" bind:value={customerName} required autocomplete="name" />
+            <InputField id="customer-contact" label="Kontak" bind:value={customerContact} required autocomplete="tel" helper="Email atau nomor telepon yang aktif." />
           </div>
-          <label class="mt-4 block text-sm font-medium">
-            Alamat pengiriman
-            <textarea class="mt-2 min-h-28 w-full rounded-xl border border-border bg-surface px-3 py-3" bind:value={shippingAddress} required></textarea>
-          </label>
-        </div>
+        </FormSection>
 
-        <button class="min-h-11 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50" disabled={submitting || items.length === 0}>
-          {submitting ? 'Mengirim checkout…' : 'Kirim checkout'}
-        </button>
+        <FormSection title="Alamat pengiriman" description="Alamat ini tersimpan sebagai snapshot order untuk fulfillment lintas brand." eyebrow="Step 2">
+          <InputField id="shipping-address" label="Alamat pengiriman" bind:value={shippingAddress} required as="textarea" rows={5} />
+        </FormSection>
+
+        <FormSection title="Catatan tambahan" description="Opsional. Misal: preferensi pengiriman, catatan warna, atau jam penerimaan." eyebrow="Step 3">
+          <InputField id="checkout-note" label="Catatan" bind:value={note} as="textarea" rows={4} />
+        </FormSection>
+
+        <FormSection title="Pembayaran" description="Setelah order dibuat, sistem akan menampilkan tracking token dan instruksi upload bukti transfer private." eyebrow="Step 4">
+          <div class="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-warning">
+            <p class="font-semibold">Manual transfer only</p>
+            <p class="mt-1">Customer menyelesaikan transfer di luar sistem, lalu upload bukti pembayaran pada halaman tracking order. Tidak ada public preview untuk bukti transfer.</p>
+          </div>
+        </FormSection>
+
+        <SubmitButton type="submit" tone="primary" loading={submitting} disabled={submitting || items.length === 0}>
+          {submitting ? 'Mengirim checkout…' : 'Buat order sekarang'}
+        </SubmitButton>
       </form>
     </section>
 
     <aside class="space-y-4">
-      <StateNotice tone="warning" title="Payment proof tetap private" message="Gate H tidak membuat preview bukti transfer sebagai static media. Upload proof harus memakai endpoint protected dan authorization backend." />
-      <div class="panel p-5">
-        <h2 class="font-semibold">Ringkasan order draft</h2>
-        <dl class="mt-3 space-y-3 text-sm">
+      <div class="panel p-6 lg:sticky lg:top-24">
+        <h2 class="font-semibold">Ringkasan order</h2>
+        <dl class="mt-4 space-y-3 text-sm">
           <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Item</dt><dd class="font-semibold tabular-nums">{items.length}</dd></div>
           <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Subtotal</dt><dd class="font-semibold tabular-nums">Rp{total(items).toLocaleString('id-ID')}</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Payment method</dt><dd>Manual transfer</dd></div>
         </dl>
         {#if orderNumber}
           <div class="mt-4 rounded-xl border border-success/30 bg-success/10 p-4 text-sm">
             <p class="font-semibold text-success">Order {orderNumber}</p>
-            <p class="mt-1 text-muted-foreground">Tracking token publik sudah dibuat dan bisa dipakai customer untuk melihat status order tanpa membuka media private.</p>
+            <p class="mt-1 text-muted-foreground">Tracking token publik sudah dibuat. Lanjutkan ke halaman tracking untuk upload bukti pembayaran private.</p>
           </div>
         {/if}
+        <div class="mt-4 space-y-2 text-sm text-muted-foreground">
+          {#each items as item}
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2">
+              <span class="line-clamp-1">{item.name} × {item.quantity}</span>
+              <span class="font-semibold tabular-nums">Rp{(Number(item.price) * item.quantity).toLocaleString('id-ID')}</span>
+            </div>
+          {/each}
+        </div>
       </div>
     </aside>
   </div>

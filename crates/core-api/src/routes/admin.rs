@@ -1,5 +1,5 @@
 use crate::{
-    authz::{require_super_admin, AuthenticatedActor},
+    authz::{is_brand_scoped, is_full_access, require_admin_or_super, require_super_admin, AuthenticatedActor},
     diagnostics,
     routes::auth::{require_csrf, AuthErrorResponse},
 };
@@ -11,6 +11,7 @@ use axum::{
 };
 use core_app::AppState;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -18,8 +19,12 @@ pub fn router() -> Router<AppState> {
         .route("/products", get(list_products).post(create_product))
         .route("/orders", get(list_orders))
         .route("/payment-proofs", get(list_payment_proofs))
-        .route("/users", get(list_users).post(create_seller))
+        .route("/users", get(list_users).post(create_operator))
         .route("/packages", get(list_packages))
+        .route("/dashboard/summary", get(dashboard_summary))
+        .route("/demo/seed", axum::routing::post(seed_demo_data))
+        .route("/demo/clear", axum::routing::delete(clear_demo_data))
+        .route("/install/reset", axum::routing::post(reset_install))
         .route("/diagnostics/export", get(diagnostics::export))
         .route("/brand-members", axum::routing::post(create_brand_member))
         .route("/brand-member-permissions", axum::routing::post(grant_brand_member_permission))
@@ -67,6 +72,40 @@ pub struct CreateSellerRequest {
     pub name: String,
     pub email: String,
     pub password: secrecy::SecretString,
+}
+
+/// Unified operator creation request — supports seller, karyawan, admin.
+/// `role` must be one of: "seller", "karyawan", "admin".
+/// Only super_admin can create admin; admin can create seller/karyawan.
+#[derive(Debug, Deserialize)]
+pub struct CreateOperatorRequest {
+    pub name: String,
+    pub email: String,
+    pub password: secrecy::SecretString,
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResetInstallRequest {
+    /// Current super_admin password for double-confirm.
+    pub password: secrecy::SecretString,
+    /// Must be true to proceed.
+    pub confirmed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DashboardSummaryResponse {
+    pub brands_active: i64,
+    pub products_published: i64,
+    pub orders_open: i64,
+    pub payments_pending_verification: i64,
+    pub scope: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResetInstallResponse {
+    pub reset: bool,
+    pub message: &'static str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,16 +177,14 @@ async fn list_brands(
     actor: AuthenticatedActor,
 ) -> Result<Json<BrandsResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let pool = require_pool(&state)?;
-    let brands = match actor.role_code.as_str() {
-        "super_admin" => core_db::list_brands(pool).await.map_err(repo_error)?,
-        "seller" => core_db::list_brands_for_user(pool, actor.user_id)
+    let brands = if is_full_access(&actor) {
+        core_db::list_brands(pool).await.map_err(repo_error)?
+    } else if is_brand_scoped(&actor) {
+        core_db::list_brands_for_user(pool, actor.user_id)
             .await
-            .map_err(repo_error)?,
-        _ => {
-            return Err(forbidden(
-                "seller or super admin access is required".to_string(),
-            ))
-        }
+            .map_err(repo_error)?
+    } else {
+        return Err(forbidden("operator access is required".to_string()));
     };
     Ok(Json(BrandsResponse { brands }))
 }
@@ -159,7 +196,7 @@ async fn create_brand(
     Json(body): Json<CreateBrandRequest>,
 ) -> Result<(StatusCode, Json<core_db::BrandRecord>), (StatusCode, Json<AuthErrorResponse>)> {
     require_csrf(&headers)?;
-    require_super_admin(&actor)?;
+    require_admin_or_super(&actor)?;
     let pool = require_pool(&state)?;
     let brand = core_db::create_brand(
         pool,
@@ -181,23 +218,21 @@ async fn list_products(
     actor: AuthenticatedActor,
 ) -> Result<Json<ProductsResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let pool = require_pool(&state)?;
-    let products = match actor.role_code.as_str() {
-        "super_admin" => core_db::list_admin_products(pool)
+    let products = if is_full_access(&actor) {
+        core_db::list_admin_products(pool)
             .await
-            .map_err(repo_error)?,
-        "seller" => core_db::list_admin_products_for_user(pool, actor.user_id)
+            .map_err(repo_error)?
+    } else if is_brand_scoped(&actor) {
+        core_db::list_admin_products_for_user(pool, actor.user_id)
             .await
-            .map_err(repo_error)?,
-        _ => {
-            return Err(forbidden(
-                "seller or super admin access is required".to_string(),
-            ))
-        }
+            .map_err(repo_error)?
+    } else {
+        return Err(forbidden("operator access is required".to_string()));
     };
     Ok(Json(ProductsResponse {
         products,
         gate_e_note:
-            "admin product reads now allow seller brand scope; mutation remains restricted by role and brand membership.",
+            "admin product reads now allow admin cross-brand scope and seller/karyawan brand scope; mutation remains backend authoritative.",
     }))
 }
 
@@ -225,12 +260,14 @@ async fn list_orders(
     actor: AuthenticatedActor,
 ) -> Result<Json<OrdersResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let pool = require_pool(&state)?;
-    let orders = match actor.role_code.as_str() {
-        "super_admin" => core_db::list_admin_orders(pool).await.map_err(repo_error)?,
-        "seller" => core_db::list_admin_orders_for_user(pool, actor.user_id)
+    let orders = if is_full_access(&actor) {
+        core_db::list_admin_orders(pool).await.map_err(repo_error)?
+    } else if is_brand_scoped(&actor) {
+        core_db::list_admin_orders_for_user(pool, actor.user_id)
             .await
-            .map_err(repo_error)?,
-        _ => return Err(forbidden("seller or super admin access is required".to_string())),
+            .map_err(repo_error)?
+    } else {
+        return Err(forbidden("operator access is required".to_string()));
     };
 
     Ok(Json(OrdersResponse { orders }))
@@ -248,15 +285,32 @@ async fn list_users(
     Ok(Json(UsersResponse { users }))
 }
 
-async fn create_seller(
+async fn create_operator(
     State(state): State<AppState>,
     headers: HeaderMap,
     actor: AuthenticatedActor,
-    Json(body): Json<CreateSellerRequest>,
+    Json(body): Json<CreateOperatorRequest>,
 ) -> Result<(StatusCode, Json<core_db::UserSummaryRecord>), (StatusCode, Json<AuthErrorResponse>)> {
     require_csrf(&headers)?;
-    require_super_admin(&actor)?;
     let pool = require_pool(&state)?;
+
+    // Determine target role. Default to "seller" when not specified.
+    let target_role = body.role.as_deref().unwrap_or("seller");
+
+    // Only super_admin can create admin accounts.
+    // admin can create seller and karyawan.
+    match target_role {
+        "admin" => require_super_admin(&actor)?,
+        "seller" | "karyawan" => require_admin_or_super(&actor)?,
+        _ => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_role",
+                format!("role must be one of: seller, karyawan, admin; got `{target_role}`"),
+            ))
+        }
+    }
+
     let password_hash = core_auth::hash_password(&body.password).map_err(|error| {
         api_error(
             StatusCode::BAD_REQUEST,
@@ -265,12 +319,13 @@ async fn create_seller(
         )
     })?;
 
-    let user = core_db::create_seller_user(
+    let user = core_db::create_user_with_role(
         pool,
-        core_db::CreateSellerInput {
+        core_db::CreateUserWithRoleInput {
             name: body.name,
             email: body.email.trim().to_ascii_lowercase(),
             password_hash,
+            role_code: target_role.to_string(),
         },
     )
     .await
@@ -284,8 +339,8 @@ async fn list_payment_proofs(
     actor: AuthenticatedActor,
 ) -> Result<Json<PaymentProofsResponse>, (StatusCode, Json<AuthErrorResponse>)> {
     let pool = require_pool(&state)?;
-    let payment_proofs = match actor.role_code.as_str() {
-        "super_admin" => core_db::list_payment_proofs(pool)
+    let payment_proofs = if is_full_access(&actor) {
+        core_db::list_payment_proofs(pool)
             .await
             .map_err(media_repo_error)?
             .into_iter()
@@ -299,54 +354,54 @@ async fn list_payment_proofs(
                 can_verify: true,
                 can_reject: true,
             })
-            .collect(),
-        "seller" => {
-            let proofs = core_db::list_payment_proofs_for_user(pool, actor.user_id)
-                .await
-                .map_err(media_repo_error)?;
-            let mut responses = Vec::with_capacity(proofs.len());
+            .collect()
+    } else if is_brand_scoped(&actor) {
+        let proofs = core_db::list_payment_proofs_for_user(pool, actor.user_id)
+            .await
+            .map_err(media_repo_error)?;
+        let mut responses = Vec::with_capacity(proofs.len());
 
-            for proof in proofs {
-                let can_view_file = core_db::user_has_brand_scoped_permission_for_order(
-                    pool,
-                    actor.user_id,
-                    proof.order_id,
-                    core_db::PAYMENT_PROOF_VIEW_ASSIGNED,
-                )
-                .await
-                .map_err(media_repo_error)?;
-                let can_verify = core_db::user_has_brand_scoped_permission_for_order(
-                    pool,
-                    actor.user_id,
-                    proof.order_id,
-                    core_db::PAYMENT_PROOF_VERIFY,
-                )
-                .await
-                .map_err(media_repo_error)?;
-                let can_reject = core_db::user_has_brand_scoped_permission_for_order(
-                    pool,
-                    actor.user_id,
-                    proof.order_id,
-                    core_db::PAYMENT_PROOF_REJECT,
-                )
-                .await
-                .map_err(media_repo_error)?;
+        for proof in proofs {
+            let can_view_file = core_db::user_has_brand_scoped_permission_for_order(
+                pool,
+                actor.user_id,
+                proof.order_id,
+                core_db::PAYMENT_PROOF_VIEW_ASSIGNED,
+            )
+            .await
+            .map_err(media_repo_error)?;
+            let can_verify = core_db::user_has_brand_scoped_permission_for_order(
+                pool,
+                actor.user_id,
+                proof.order_id,
+                core_db::PAYMENT_PROOF_VERIFY,
+            )
+            .await
+            .map_err(media_repo_error)?;
+            let can_reject = core_db::user_has_brand_scoped_permission_for_order(
+                pool,
+                actor.user_id,
+                proof.order_id,
+                core_db::PAYMENT_PROOF_REJECT,
+            )
+            .await
+            .map_err(media_repo_error)?;
 
-                responses.push(PaymentProofSummaryResponse {
-                    id: proof.id,
-                    order_id: proof.order_id,
-                    file_object_id: proof.file_object_id,
-                    status: proof.status,
-                    created_at: proof.created_at,
-                    can_view_file,
-                    can_verify,
-                    can_reject,
-                });
-            }
-
-            responses
+            responses.push(PaymentProofSummaryResponse {
+                id: proof.id,
+                order_id: proof.order_id,
+                file_object_id: proof.file_object_id,
+                status: proof.status,
+                created_at: proof.created_at,
+                can_view_file,
+                can_verify,
+                can_reject,
+            });
         }
-        _ => return Err(forbidden("seller or super admin access is required".to_string())),
+
+        responses
+    } else {
+        return Err(forbidden("operator access is required".to_string()));
     };
     Ok(Json(PaymentProofsResponse { payment_proofs }))
 }
@@ -375,17 +430,15 @@ async fn update_fulfillment(
 ) -> Result<Json<core_db::OrderBrandGroupRecord>, (StatusCode, Json<AuthErrorResponse>)> {
     require_csrf(&headers)?;
     let pool = require_pool(&state)?;
-    match actor.role_code.as_str() {
-        "super_admin" => {}
-        "seller" => {
-            let allowed = core_db::seller_can_access_order_brand_group(pool, group_id, actor.user_id)
-                .await
-                .map_err(repo_error)?;
-            if !allowed {
-                return Err(forbidden("seller can only update assigned brand-group fulfillment".to_string()));
-            }
+    if is_brand_scoped(&actor) {
+        let allowed = core_db::seller_can_access_order_brand_group(pool, group_id, actor.user_id)
+            .await
+            .map_err(repo_error)?;
+        if !allowed {
+            return Err(forbidden("brand-scoped operator can only update assigned brand-group fulfillment".to_string()));
         }
-        _ => return Err(forbidden("seller or super admin access is required".to_string())),
+    } else if !is_full_access(&actor) {
+        return Err(forbidden("operator access is required".to_string()));
     }
 
     let next_status = validate_fulfillment_status(&body.fulfillment_status)?;
@@ -429,23 +482,17 @@ async fn create_product(
 > {
     require_csrf(&headers)?;
     let pool = require_pool(&state)?;
-    match actor.role_code.as_str() {
-        "super_admin" => {}
-        "seller" => {
-            let assigned = core_db::user_is_brand_member(pool, actor.user_id, body.brand_id)
-                .await
-                .map_err(repo_error)?;
-            if !assigned {
-                return Err(forbidden(
-                    "seller can only create products for assigned brands".to_string(),
-                ));
-            }
-        }
-        _ => {
+    if is_brand_scoped(&actor) {
+        let assigned = core_db::user_is_brand_member(pool, actor.user_id, body.brand_id)
+            .await
+            .map_err(repo_error)?;
+        if !assigned {
             return Err(forbidden(
-                "seller or super admin access is required".to_string(),
-            ))
+                "brand-scoped operator can only create products for assigned brands".to_string(),
+            ));
         }
+    } else if !is_full_access(&actor) {
+        return Err(forbidden("operator access is required".to_string()));
     }
     let product = core_db::create_product_with_default_variant(
         pool,
@@ -500,6 +547,169 @@ async fn create_brand_member(
             member_role: member.member_role,
         }),
     ))
+}
+
+async fn dashboard_summary(
+    State(state): State<AppState>,
+    actor: AuthenticatedActor,
+) -> Result<Json<DashboardSummaryResponse>, (StatusCode, Json<AuthErrorResponse>)> {
+    let pool = require_pool(&state)?;
+    let summary = if is_full_access(&actor) {
+        core_db::load_dashboard_summary(pool, None)
+            .await
+            .map_err(repo_error)?
+    } else if is_brand_scoped(&actor) {
+        core_db::load_dashboard_summary(pool, Some(actor.user_id))
+            .await
+            .map_err(repo_error)?
+    } else {
+        return Err(forbidden("operator access is required".to_string()));
+    };
+
+    Ok(Json(DashboardSummaryResponse {
+        brands_active: summary.brands_active,
+        products_published: summary.products_published,
+        orders_open: summary.orders_open,
+        payments_pending_verification: summary.payments_pending_verification,
+        scope: if is_full_access(&actor) { "all" } else { "assigned" },
+    }))
+}
+
+async fn seed_demo_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    actor: AuthenticatedActor,
+) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
+    require_csrf(&headers)?;
+    require_super_admin(&actor)?;
+    let pool = require_pool(&state)?;
+
+    let install = core_db::get_installation_state(pool)
+        .await
+        .map_err(install_repo_error)?;
+    if !install.as_ref().is_some_and(|record| record.locked) {
+        return Err(api_error(
+            StatusCode::CONFLICT,
+            "installation_not_locked",
+            "demo seed can only run after installation is locked".to_string(),
+        ));
+    }
+
+    core_installer::seed_demo_clothing(pool)
+        .await
+        .map_err(installer_error)?;
+    write_admin_audit_event(
+        Some(pool),
+        Some(actor.user_id),
+        "demo.seed",
+        "demo_data",
+        None,
+        "success",
+        &[("seeded", Value::Bool(true))],
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn clear_demo_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    actor: AuthenticatedActor,
+) -> Result<StatusCode, (StatusCode, Json<AuthErrorResponse>)> {
+    require_csrf(&headers)?;
+    require_super_admin(&actor)?;
+    let pool = require_pool(&state)?;
+
+    core_installer::clear_demo_clothing(pool)
+        .await
+        .map_err(installer_error)?;
+    write_admin_audit_event(
+        Some(pool),
+        Some(actor.user_id),
+        "demo.clear",
+        "demo_data",
+        None,
+        "success",
+        &[("cleared", Value::Bool(true))],
+    )
+    .await;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn reset_install(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    actor: AuthenticatedActor,
+    Json(body): Json<ResetInstallRequest>,
+) -> Result<Json<ResetInstallResponse>, (StatusCode, Json<AuthErrorResponse>)> {
+    require_csrf(&headers)?;
+    require_super_admin(&actor)?;
+    if !body.confirmed {
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "confirmation_required",
+            "confirmation checkbox is required".to_string(),
+        ));
+    }
+
+    let pool = require_pool(&state)?;
+    let session_user = core_db::find_active_user_by_id_with_role(pool, actor.user_id)
+        .await
+        .map_err(auth_repo_error)?
+        .ok_or_else(|| {
+            api_error(
+                StatusCode::UNAUTHORIZED,
+                "user_not_found",
+                "current operator was not found".to_string(),
+            )
+        })?;
+
+    let password_valid = core_auth::verify_password(&body.password, &session_user.password_hash)
+        .map_err(|error| {
+            api_error(
+                StatusCode::UNAUTHORIZED,
+                "invalid_credentials",
+                error.to_string(),
+            )
+        })?;
+    if !password_valid {
+        write_admin_audit_event(
+            Some(pool),
+            Some(actor.user_id),
+            "install.reset",
+            "installation_state",
+            None,
+            "failure",
+            &[("reason", Value::String("invalid_password".to_string()))],
+        )
+        .await;
+        return Err(api_error(
+            StatusCode::UNAUTHORIZED,
+            "invalid_credentials",
+            "invalid password".to_string(),
+        ));
+    }
+
+    core_db::reset_installation_state(pool)
+        .await
+        .map_err(install_repo_error)?;
+    write_admin_audit_event(
+        Some(pool),
+        Some(actor.user_id),
+        "install.reset",
+        "installation_state",
+        None,
+        "success",
+        &[("confirmed", Value::Bool(true))],
+    )
+    .await;
+
+    Ok(Json(ResetInstallResponse {
+        reset: true,
+        message: "installation reset completed",
+    }))
 }
 
 fn require_pool(state: &AppState) -> Result<&sqlx::PgPool, (StatusCode, Json<AuthErrorResponse>)> {
@@ -567,6 +777,62 @@ fn api_error(
 
 fn forbidden(message: String) -> (StatusCode, Json<AuthErrorResponse>) {
     api_error(StatusCode::FORBIDDEN, "forbidden", message)
+}
+
+fn install_repo_error(
+    error: core_db::InstallRepositoryError,
+) -> (StatusCode, Json<AuthErrorResponse>) {
+    tracing::warn!(error = %error, "admin install repository operation failed");
+    api_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "install_operation_failed",
+        error.to_string(),
+    )
+}
+
+fn installer_error(error: core_installer::DemoSeedError) -> (StatusCode, Json<AuthErrorResponse>) {
+    tracing::warn!(error = %error, "demo seed/clear operation failed");
+    api_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "demo_operation_failed",
+        error.to_string(),
+    )
+}
+
+async fn write_admin_audit_event(
+    pool: Option<&sqlx::PgPool>,
+    actor_user_id: Option<uuid::Uuid>,
+    action: &str,
+    target_type: &str,
+    target_id: Option<uuid::Uuid>,
+    result: &str,
+    metadata_entries: &[(&str, Value)],
+) {
+    let Some(pool) = pool else {
+        return;
+    };
+    let metadata = match core_db::safe_audit_metadata(metadata_entries) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            tracing::warn!(error = %error, action, "admin audit metadata rejected");
+            serde_json::json!({})
+        }
+    };
+    if let Err(error) = core_db::write_audit_event(
+        pool,
+        core_db::AuditEventInput {
+            actor_user_id,
+            action: action.to_string(),
+            target_type: target_type.to_string(),
+            target_id,
+            result: result.to_string(),
+            metadata,
+        },
+    )
+    .await
+    {
+        tracing::warn!(error = %error, action, "failed to write admin audit event");
+    }
 }
 
 #[cfg(test)]

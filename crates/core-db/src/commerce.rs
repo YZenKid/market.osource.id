@@ -218,6 +218,14 @@ pub struct AdminOrderRecord {
     pub payment_proof_statuses: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DashboardSummaryRecord {
+    pub brands_active: i64,
+    pub products_published: i64,
+    pub orders_open: i64,
+    pub payments_pending_verification: i64,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommerceRepositoryError {
     #[error("checkout requires at least one item")]
@@ -787,6 +795,65 @@ pub async fn list_admin_orders_for_user(
     user_id: uuid::Uuid,
 ) -> Result<Vec<AdminOrderRecord>, CommerceRepositoryError> {
     admin_orders_from_rows(fetch_admin_order_rows(pool, Some(user_id)).await?)
+}
+
+pub async fn load_dashboard_summary(
+    pool: &PgPool,
+    user_id: Option<uuid::Uuid>,
+) -> Result<DashboardSummaryRecord, CommerceRepositoryError> {
+    let row = sqlx::query(
+        r#"
+        WITH scoped_brands AS (
+          SELECT b.id
+          FROM brands b
+          LEFT JOIN brand_members bm ON bm.brand_id = b.id
+          WHERE b.status = 'active'
+            AND ($1::uuid IS NULL OR bm.user_id = $1)
+          GROUP BY b.id
+        ),
+        scoped_products AS (
+          SELECT p.id
+          FROM products p
+          LEFT JOIN brand_members bm ON bm.brand_id = p.brand_id
+          WHERE p.status = 'published'
+            AND ($1::uuid IS NULL OR bm.user_id = $1)
+          GROUP BY p.id
+        ),
+        scoped_orders AS (
+          SELECT o.id
+          FROM orders o
+          JOIN order_brand_groups obg ON obg.order_id = o.id
+          LEFT JOIN brand_members bm ON bm.brand_id = obg.brand_id
+          WHERE o.global_status = 'open'
+            AND ($1::uuid IS NULL OR bm.user_id = $1)
+          GROUP BY o.id
+        ),
+        scoped_payments AS (
+          SELECT pp.id
+          FROM payment_proofs pp
+          JOIN order_brand_groups obg ON obg.order_id = pp.order_id
+          LEFT JOIN brand_members bm ON bm.brand_id = obg.brand_id
+          WHERE pp.status = 'uploaded'
+            AND ($1::uuid IS NULL OR bm.user_id = $1)
+          GROUP BY pp.id
+        )
+        SELECT
+          (SELECT COUNT(*)::bigint FROM scoped_brands) AS brands_active,
+          (SELECT COUNT(*)::bigint FROM scoped_products) AS products_published,
+          (SELECT COUNT(*)::bigint FROM scoped_orders) AS orders_open,
+          (SELECT COUNT(*)::bigint FROM scoped_payments) AS payments_pending_verification
+        "#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(DashboardSummaryRecord {
+        brands_active: row.get("brands_active"),
+        products_published: row.get("products_published"),
+        orders_open: row.get("orders_open"),
+        payments_pending_verification: row.get("payments_pending_verification"),
+    })
 }
 
 pub fn group_checkout_snapshots_by_brand(

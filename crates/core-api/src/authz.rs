@@ -77,6 +77,46 @@ pub fn require_super_admin(
     }
 }
 
+/// Allow `super_admin` or `admin`. Rejects `karyawan`, `seller`, and any other role.
+pub fn require_admin_or_super(
+    actor: &AuthenticatedActor,
+) -> Result<(), (StatusCode, Json<AuthErrorResponse>)> {
+    match actor.role_code.as_str() {
+        "super_admin" | "admin" => Ok(()),
+        _ => Err(auth_error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "admin or super admin access is required".to_string(),
+        )),
+    }
+}
+
+/// Allow any operator role: `super_admin`, `admin`, `karyawan`, `seller`.
+/// Rejects unauthenticated and any unknown role code.
+pub fn require_operator(
+    actor: &AuthenticatedActor,
+) -> Result<(), (StatusCode, Json<AuthErrorResponse>)> {
+    match actor.role_code.as_str() {
+        "super_admin" | "admin" | "karyawan" | "seller" => Ok(()),
+        _ => Err(auth_error(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "operator access is required".to_string(),
+        )),
+    }
+}
+
+/// Returns true when the actor is brand-scoped (seller or karyawan).
+/// Used by handlers that need to decide between full-access and brand-filtered queries.
+pub fn is_brand_scoped(actor: &AuthenticatedActor) -> bool {
+    matches!(actor.role_code.as_str(), "seller" | "karyawan")
+}
+
+/// Returns true when the actor has full cross-brand read access (super_admin or admin).
+pub fn is_full_access(actor: &AuthenticatedActor) -> bool {
+    matches!(actor.role_code.as_str(), "super_admin" | "admin")
+}
+
 fn unauthenticated() -> (StatusCode, Json<AuthErrorResponse>) {
     auth_error(
         StatusCode::UNAUTHORIZED,
@@ -151,5 +191,62 @@ mod tests {
             require_super_admin(&actor).unwrap_err().0,
             StatusCode::FORBIDDEN
         );
+    }
+
+    #[test]
+    fn admin_or_super_helper_accepts_admin_and_super_admin() {
+        for (role_code, role_name) in [
+            ("super_admin", "Super Admin"),
+            ("admin", "Admin"),
+        ] {
+            let actor = AuthenticatedActor {
+                user_id: uuid::Uuid::nil(),
+                role_code: role_code.to_string(),
+                role_name: role_name.to_string(),
+            };
+
+            assert!(require_admin_or_super(&actor).is_ok());
+        }
+    }
+
+    #[test]
+    fn admin_or_super_helper_rejects_brand_scoped_roles() {
+        for (role_code, role_name) in [("seller", "Seller"), ("karyawan", "Karyawan")] {
+            let actor = AuthenticatedActor {
+                user_id: uuid::Uuid::nil(),
+                role_code: role_code.to_string(),
+                role_name: role_name.to_string(),
+            };
+
+            assert_eq!(
+                require_admin_or_super(&actor).unwrap_err().0,
+                StatusCode::FORBIDDEN
+            );
+        }
+    }
+
+    #[test]
+    fn role_scope_helpers_follow_expected_matrix() {
+        let seller = AuthenticatedActor {
+            user_id: uuid::Uuid::nil(),
+            role_code: "seller".to_string(),
+            role_name: "Seller".to_string(),
+        };
+        let karyawan = AuthenticatedActor {
+            user_id: uuid::Uuid::nil(),
+            role_code: "karyawan".to_string(),
+            role_name: "Karyawan".to_string(),
+        };
+        let admin = AuthenticatedActor {
+            user_id: uuid::Uuid::nil(),
+            role_code: "admin".to_string(),
+            role_name: "Admin".to_string(),
+        };
+
+        assert!(is_brand_scoped(&seller));
+        assert!(is_brand_scoped(&karyawan));
+        assert!(!is_brand_scoped(&admin));
+        assert!(is_full_access(&admin));
+        assert!(!is_full_access(&seller));
     }
 }

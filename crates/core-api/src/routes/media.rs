@@ -472,10 +472,12 @@ async fn can_decide_payment_proof(
     order_id: uuid::Uuid,
     decision: core_db::PaymentProofDecision,
 ) -> Result<bool, (StatusCode, Json<AuthErrorResponse>)> {
-    if actor.role_code == "super_admin" {
+    use crate::authz::{is_brand_scoped, is_full_access};
+
+    if is_full_access(actor) {
         return Ok(true);
     }
-    if actor.role_code != "seller" {
+    if !is_brand_scoped(actor) {
         return Ok(false);
     }
 
@@ -501,10 +503,12 @@ async fn can_read_payment_proof(
     actor: &AuthenticatedActor,
     order_id: uuid::Uuid,
 ) -> Result<bool, (StatusCode, Json<AuthErrorResponse>)> {
-    if actor.role_code == "super_admin" {
+    use crate::authz::{is_brand_scoped, is_full_access};
+
+    if is_full_access(actor) {
         return Ok(true);
     }
-    if actor.role_code != "seller" {
+    if !is_brand_scoped(actor) {
         return Ok(false);
     }
 
@@ -654,7 +658,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn non_seller_non_super_admin_cannot_read_payment_proof_without_db_lookup() {
+    async fn karyawan_private_media_permission_defaults_to_deny_without_database() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://example.invalid/db").unwrap();
+        let actor = AuthenticatedActor {
+            user_id: uuid::Uuid::new_v4(),
+            role_code: "karyawan".to_string(),
+            role_name: "Karyawan".to_string(),
+        };
+
+        // karyawan is brand-scoped so it hits the DB lookup and fails with 500.
+        let result = can_read_payment_proof(&pool, &actor, uuid::Uuid::new_v4()).await;
+        assert_eq!(result.unwrap_err().0, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn non_operator_cannot_read_payment_proof_without_db_lookup() {
         let pool = sqlx::PgPool::connect_lazy("postgres://example.invalid/db").unwrap();
         let actor = AuthenticatedActor {
             user_id: uuid::Uuid::new_v4(),
@@ -668,7 +686,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn non_seller_non_super_admin_cannot_decide_payment_proof_without_db_lookup() {
+    async fn non_operator_cannot_decide_payment_proof_without_db_lookup() {
         let pool = sqlx::PgPool::connect_lazy("postgres://example.invalid/db").unwrap();
         let actor = AuthenticatedActor {
             user_id: uuid::Uuid::new_v4(),

@@ -30,6 +30,9 @@ pub struct SetupRequestBody {
     pub admin_name: String,
     pub admin_email: String,
     pub admin_password: secrecy::SecretString,
+    /// If true, seed clothing demo data after setup completes.
+    #[serde(default)]
+    pub seed_demo: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -239,6 +242,18 @@ async fn setup(
         }
     };
 
+    let demo_seeded = if body.seed_demo {
+        match core_installer::seed_demo_clothing(pool).await {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(error = %error, "setup completed but demo seed failed");
+                false
+            }
+        }
+    } else {
+        false
+    };
+
     let created_session = create_session_cookie(
         pool,
         bootstrap.admin_user_id,
@@ -260,6 +275,8 @@ async fn setup(
         &[
             ("locked", Value::Bool(bootstrap.installation.locked)),
             ("session_created", Value::Bool(true)),
+            ("demo_seed_requested", Value::Bool(body.seed_demo)),
+            ("demo_seeded", Value::Bool(demo_seeded)),
         ],
     )
     .await;

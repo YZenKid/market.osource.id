@@ -48,6 +48,14 @@ pub struct CreateSellerInput {
     pub password_hash: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreateUserWithRoleInput {
+    pub name: String,
+    pub email: String,
+    pub password_hash: String,
+    pub role_code: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AuthRepositoryError {
     #[error("database error")]
@@ -77,18 +85,36 @@ pub async fn create_seller_user(
     pool: &PgPool,
     input: CreateSellerInput,
 ) -> Result<UserSummaryRecord, AuthRepositoryError> {
+    create_user_with_role(
+        pool,
+        CreateUserWithRoleInput {
+            name: input.name,
+            email: input.email,
+            password_hash: input.password_hash,
+            role_code: "seller".to_string(),
+        },
+    )
+    .await
+}
+
+pub async fn create_user_with_role(
+    pool: &PgPool,
+    input: CreateUserWithRoleInput,
+) -> Result<UserSummaryRecord, AuthRepositoryError> {
     let row = sqlx::query(
         r#"
         INSERT INTO users (role_id, name, email, password_hash, status)
-        SELECT id, $1, $2, $3, 'active'
-        FROM roles WHERE code = 'seller'
+        SELECT roles.id, $1, $2, $3, 'active'
+        FROM roles WHERE roles.code = $4
         RETURNING users.id, users.name, users.email, users.status,
-                  'seller'::text AS role_code, 'Seller'::text AS role_name
+                  $4::text AS role_code,
+                  (SELECT roles.name FROM roles WHERE roles.code = $4 LIMIT 1) AS role_name
         "#,
     )
     .bind(input.name)
     .bind(input.email)
     .bind(input.password_hash)
+    .bind(input.role_code)
     .fetch_one(pool)
     .await?;
 
@@ -111,6 +137,35 @@ pub async fn find_active_user_by_email_with_role(
         "#,
     )
     .bind(email)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|row| AuthUserRecord {
+        id: row.get("id"),
+        name: row.get("name"),
+        email: row.get("email"),
+        password_hash: row.get("password_hash"),
+        role_code: row.get("role_code"),
+        role_name: row.get("role_name"),
+    }))
+}
+
+pub async fn find_active_user_by_id_with_role(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+) -> Result<Option<AuthUserRecord>, AuthRepositoryError> {
+    let row = sqlx::query(
+        r#"
+        SELECT users.id, users.name, users.email, users.password_hash,
+               roles.code AS role_code, roles.name AS role_name
+        FROM users
+        JOIN roles ON roles.id = users.role_id
+        WHERE users.id = $1
+          AND users.status = 'active'
+        LIMIT 1
+        "#,
+    )
+    .bind(user_id)
     .fetch_optional(pool)
     .await?;
 
