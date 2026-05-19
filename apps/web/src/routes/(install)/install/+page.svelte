@@ -138,6 +138,17 @@
 
     <div class="grid gap-6 p-6 md:grid-cols-[1fr_300px]">
       <form class="space-y-5" aria-label="Install setup form" on:submit|preventDefault={submitSetup}>
+        {#if !installState?.locked}
+          <div class="hidden md:block">
+            <img
+              src="/assets/install-onboarding.png"
+              alt="Ilustrasi langkah onboarding: buat Super Admin, kunci setup, dan buka admin dashboard."
+              class="w-full rounded-xl border border-border object-contain aspect-[4/3]"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        {/if}
         {#if loading}
           <div class="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">Memuat status install…</div>
         {/if}

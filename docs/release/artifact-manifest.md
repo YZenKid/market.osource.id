@@ -86,3 +86,27 @@ Sebelum RC/public release, setiap manifest harus menautkan note yang menjawab:
 - langkah upgrade termasuk migration dan backup prerequisites.
 
 Template siap pakai tersedia di `docs/release/release-notes-template.md`.
+
+## Runtime contract verification
+
+Sebelum artifact dinyatakan layak untuk lane systemd/container/desktop-adjacent smoke, catat hasil minimal dari:
+
+```bash
+BASE_URL=http://127.0.0.1:8301 ./scripts/release/verify_runtime_contract.sh
+```
+
+Helper ini memverifikasi bahwa:
+
+- `/health` mengembalikan probe `liveness`,
+- `/ready` mengembalikan probe `readiness` + daftar checks,
+- `/version` mengembalikan identitas app/version.
+
+Simpan output command ini atau path evidence turunannya pada bagian `evidence.smoke_test_notes` di manifest release.
+
+Untuk smoke evidence yang executable, gunakan salah satu atau beberapa helper berikut dan simpan direktori outputnya:
+
+```bash
+./scripts/release/smoke_systemd.sh
+./scripts/release/smoke_compose.sh
+SMOKE_MODE=systemd ./scripts/release/release_closeout.sh
+```

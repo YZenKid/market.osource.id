@@ -25,6 +25,24 @@ Sensitive values, especially `DATABASE_URL`, must not be committed, printed in d
 8. Run `systemctl daemon-reload && systemctl enable --now market-osource market-osource-web`.
 9. Verify `/health`, `/ready`, `/api/system/runtime`, and the install UI through the local reverse proxy.
 
+Untuk verification yang konsisten antar lane, gunakan juga helper runtime contract:
+
+```bash
+BASE_URL=http://127.0.0.1:8301 ./scripts/release/verify_runtime_contract.sh
+```
+
+`/health` adalah liveness probe, sedangkan `/ready` adalah readiness probe yang boleh bernilai `not_ready` pada fresh install sebelum lock/setup selesai.
+
+Untuk lane executable smoke, gunakan helper berikut:
+
+```bash
+# systemd lane
+BASE_URL=http://127.0.0.1:8301 WEB_URL=http://127.0.0.1:8300/ ./scripts/release/smoke_systemd.sh
+
+# compose lane, non-destructive by default
+BASE_URL=http://127.0.0.1:8301 WEB_URL=http://127.0.0.1:8300/ ./scripts/release/smoke_compose.sh
+```
+
 ## VPS service topology
 
 VPS production uses two app services:
@@ -49,6 +67,8 @@ Use `docker-compose.yml` for local VPS smoke testing. It models separate `backen
 
 The Compose `web` service is built from the repository `Dockerfile` (`web-runtime` target). Dependencies and SvelteKit build artifacts are baked into the image at build time; the container does not run `npm ci` at startup and does not require a writable source bind-mount. This avoids restart loops when source mounts are read-only.
 
+Untuk menjalankan stack smoke dari helper yang sama secara eksplisit, set `START_STACK=1`. Default helper compose tetap non-destruktif dan hanya memeriksa stack yang sudah berjalan.
+
 ## Security notes
 
 - Use HTTPS at the reverse proxy/tunnel boundary.
@@ -62,3 +82,4 @@ The Compose `web` service is built from the repository `Dockerfile` (`web-runtim
 - `/api/system/runtime` reports backend readiness, install state, package registry counts, local storage path, desktop PostgreSQL sidecar detection, and tunnel default-off status.
 - Runtime status is read-only in the current Gate C slice. It must not start PostgreSQL, backend, or `cloudflared` processes.
 - The desktop shell reports the same default-off PostgreSQL/tunnel posture for operator visibility while real process supervision is implemented in a later Gate C slice.
+- `/version` should be recorded in release evidence together with `/health` and `/ready` so operators can tie smoke results to a concrete build identity.

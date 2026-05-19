@@ -1,0 +1,6 @@
+compose smoke: PASS
+project_name=market-osource-smoke
+base_url=http://127.0.0.1:18301
+web_url=http://127.0.0.1:18300/
+started_stack=1
+evidence_dir=dist/release-evidence/compose-smoke-20260512T010901Z

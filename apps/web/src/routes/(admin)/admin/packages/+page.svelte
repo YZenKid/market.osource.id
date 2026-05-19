@@ -57,7 +57,18 @@
   {/if}
 
   {#if !loading && packages.length === 0 && !error}
-    <StateNotice tone="primary" title="Registry kosong" message="Static package registry belum mengembalikan item pada runtime ini." />
+    <section class="panel p-6">
+      <div class="grid gap-5 md:grid-cols-[220px_1fr] md:items-center">
+        <img
+          src="/assets/package-upsell.png"
+          alt="Ilustrasi paket fitur marketplace yang membantu menjelaskan status registry dan entitlement."
+          class="w-full rounded-xl border border-border object-contain aspect-[4/3]"
+          loading="lazy"
+          decoding="async"
+        />
+        <StateNotice tone="primary" title="Registry kosong" message="Static package registry belum mengembalikan item pada runtime ini." />
+      </div>
+    </section>
   {:else if !loading && packages.length > 0}
     <section class="grid gap-4 md:grid-cols-2" aria-label="Package cards">
       {#each packages as pkg}

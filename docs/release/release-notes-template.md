@@ -43,3 +43,8 @@
 - CI workflow:
 - Smoke test notes:
 - Manual operator verification:
+- Runtime contract verification (`/health`, `/ready`, `/version`):
+- Backup metadata/checksum evidence:
+- systemd smoke evidence dir:
+- compose smoke evidence dir:
+- release closeout summary:

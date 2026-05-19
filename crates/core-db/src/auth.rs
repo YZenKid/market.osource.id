@@ -31,10 +31,68 @@ pub struct CurrentSessionRecord {
     pub role_name: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct UserSummaryRecord {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub email: String,
+    pub status: String,
+    pub role_code: String,
+    pub role_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateSellerInput {
+    pub name: String,
+    pub email: String,
+    pub password_hash: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AuthRepositoryError {
     #[error("database error")]
     Database(#[from] sqlx::Error),
+}
+
+pub async fn list_active_users_with_roles(
+    pool: &PgPool,
+) -> Result<Vec<UserSummaryRecord>, AuthRepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT users.id, users.name, users.email, users.status,
+               roles.code AS role_code, roles.name AS role_name
+        FROM users
+        JOIN roles ON roles.id = users.role_id
+        WHERE users.status = 'active'
+        ORDER BY users.created_at DESC, users.name ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.iter().map(user_summary_from_row).collect())
+}
+
+pub async fn create_seller_user(
+    pool: &PgPool,
+    input: CreateSellerInput,
+) -> Result<UserSummaryRecord, AuthRepositoryError> {
+    let row = sqlx::query(
+        r#"
+        INSERT INTO users (role_id, name, email, password_hash, status)
+        SELECT id, $1, $2, $3, 'active'
+        FROM roles WHERE code = 'seller'
+        RETURNING users.id, users.name, users.email, users.status,
+                  'seller'::text AS role_code, 'Seller'::text AS role_name
+        "#,
+    )
+    .bind(input.name)
+    .bind(input.email)
+    .bind(input.password_hash)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(user_summary_from_row(&row))
 }
 
 pub async fn find_active_user_by_email_with_role(
@@ -146,6 +204,17 @@ pub async fn get_current_session_by_hash(
         role_code: row.get("role_code"),
         role_name: row.get("role_name"),
     }))
+}
+
+fn user_summary_from_row(row: &sqlx::postgres::PgRow) -> UserSummaryRecord {
+    UserSummaryRecord {
+        id: row.get("id"),
+        name: row.get("name"),
+        email: row.get("email"),
+        status: row.get("status"),
+        role_code: row.get("role_code"),
+        role_name: row.get("role_name"),
+    }
 }
 
 #[cfg(test)]

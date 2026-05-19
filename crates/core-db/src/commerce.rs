@@ -203,6 +203,21 @@ pub struct OrderItemRecord {
     pub line_total_snapshot: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AdminOrderRecord {
+    pub id: uuid::Uuid,
+    pub order_number: String,
+    pub public_tracking_token: String,
+    pub customer_name: String,
+    pub payment_status: String,
+    pub global_status: String,
+    pub total_snapshot: String,
+    pub created_at: DateTime<Utc>,
+    pub groups: Vec<OrderBrandGroupRecord>,
+    pub item_count: i64,
+    pub payment_proof_statuses: Vec<String>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommerceRepositoryError {
     #[error("checkout requires at least one item")]
@@ -217,6 +232,84 @@ pub enum CommerceRepositoryError {
     Overstock,
     #[error("database error")]
     Database(#[from] sqlx::Error),
+}
+
+pub async fn update_order_brand_group_fulfillment(
+    pool: &PgPool,
+    group_id: uuid::Uuid,
+    to_status: &str,
+    changed_by_user_id: uuid::Uuid,
+    note: Option<&str>,
+) -> Result<OrderBrandGroupRecord, CommerceRepositoryError> {
+    let mut tx = pool.begin().await?;
+    let existing = sqlx::query(
+        r#"
+        SELECT id, order_id, brand_id, fulfillment_status, subtotal_snapshot::text AS subtotal_snapshot
+        FROM order_brand_groups
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(group_id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let from_status: String = existing.get("fulfillment_status");
+    let order_id: uuid::Uuid = existing.get("order_id");
+
+    let updated = sqlx::query(
+        r#"
+        UPDATE order_brand_groups
+        SET fulfillment_status = $2, updated_at = now()
+        WHERE id = $1
+        RETURNING id, order_id, brand_id, fulfillment_status, subtotal_snapshot::text AS subtotal_snapshot
+        "#,
+    )
+    .bind(group_id)
+    .bind(to_status)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO order_status_history (order_id, order_brand_group_id, changed_by_user_id, status_type, from_status, to_status, note)
+        VALUES ($1, $2, $3, 'fulfillment', $4, $5, $6)
+        "#,
+    )
+    .bind(order_id)
+    .bind(group_id)
+    .bind(changed_by_user_id)
+    .bind(from_status)
+    .bind(to_status)
+    .bind(note)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(order_group_from_row(&updated))
+}
+
+pub async fn seller_can_access_order_brand_group(
+    pool: &PgPool,
+    group_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+) -> Result<bool, CommerceRepositoryError> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+          SELECT 1
+          FROM order_brand_groups obg
+          JOIN brand_members bm ON bm.brand_id = obg.brand_id
+          WHERE obg.id = $1 AND bm.user_id = $2
+        )
+        "#,
+    )
+    .bind(group_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(exists)
 }
 
 pub async fn create_brand(
@@ -446,6 +539,112 @@ pub async fn upsert_guest_cart_item(
     })
 }
 
+/// A cart item enriched with product/variant/brand data for the storefront UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StorefrontCartItem {
+    pub product_id: uuid::Uuid,
+    pub variant_id: uuid::Uuid,
+    pub name: String,
+    pub slug: String,
+    pub description: Option<String>,
+    pub brand_name: Option<String>,
+    pub price: String,
+    pub stock: i32,
+    pub quantity: i32,
+}
+
+/// Return all enriched cart items for a guest cart identified by `anonymous_token`.
+/// Returns an empty vec if the cart does not exist yet.
+pub async fn list_guest_cart_items(
+    pool: &PgPool,
+    anonymous_token: &str,
+) -> Result<Vec<StorefrontCartItem>, CommerceRepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+          p.id          AS product_id,
+          v.id          AS variant_id,
+          p.name        AS product_name,
+          p.slug        AS slug,
+          p.description AS description,
+          b.name        AS brand_name,
+          v.price::text AS price,
+          v.stock       AS stock,
+          ci.quantity   AS quantity
+        FROM carts c
+        JOIN cart_items ci ON ci.cart_id = c.id
+        JOIN product_variants v ON v.id = ci.product_variant_id
+        JOIN products p ON p.id = v.product_id
+        JOIN brands b ON b.id = p.brand_id
+        WHERE c.anonymous_token = $1
+          AND v.status = 'active'
+          AND p.status = 'published'
+          AND b.status = 'active'
+        ORDER BY ci.created_at ASC
+        "#,
+    )
+    .bind(anonymous_token)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .iter()
+        .map(|row| StorefrontCartItem {
+            product_id: row.get("product_id"),
+            variant_id: row.get("variant_id"),
+            name: row.get("product_name"),
+            slug: row.get("slug"),
+            description: row.get("description"),
+            brand_name: row.get("brand_name"),
+            price: row.get("price"),
+            stock: row.get("stock"),
+            quantity: row.get("quantity"),
+        })
+        .collect())
+}
+
+/// Remove a single cart item by variant id for a guest cart.
+/// No-ops silently if the cart or item does not exist.
+pub async fn delete_guest_cart_item(
+    pool: &PgPool,
+    anonymous_token: &str,
+    variant_id: uuid::Uuid,
+) -> Result<(), CommerceRepositoryError> {
+    sqlx::query(
+        r#"
+        DELETE FROM cart_items
+        WHERE product_variant_id = $2
+          AND cart_id = (
+            SELECT id FROM carts WHERE anonymous_token = $1 LIMIT 1
+          )
+        "#,
+    )
+    .bind(anonymous_token)
+    .bind(variant_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Remove all items from a guest cart. No-ops if the cart does not exist.
+pub async fn clear_guest_cart(
+    pool: &PgPool,
+    anonymous_token: &str,
+) -> Result<(), CommerceRepositoryError> {
+    sqlx::query(
+        r#"
+        DELETE FROM cart_items
+        WHERE cart_id = (
+          SELECT id FROM carts WHERE anonymous_token = $1 LIMIT 1
+        )
+        "#,
+    )
+    .bind(anonymous_token)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn checkout_submitted_items(
     pool: &PgPool,
     input: CheckoutInput,
@@ -575,6 +774,19 @@ pub async fn find_storefront_order_summary_by_tracking_token(
         global_status: row.get("global_status"),
         total_snapshot: row.get("total_snapshot"),
     }))
+}
+
+pub async fn list_admin_orders(
+    pool: &PgPool,
+) -> Result<Vec<AdminOrderRecord>, CommerceRepositoryError> {
+    admin_orders_from_rows(fetch_admin_order_rows(pool, None).await?)
+}
+
+pub async fn list_admin_orders_for_user(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+) -> Result<Vec<AdminOrderRecord>, CommerceRepositoryError> {
+    admin_orders_from_rows(fetch_admin_order_rows(pool, Some(user_id)).await?)
 }
 
 pub fn group_checkout_snapshots_by_brand(
@@ -748,6 +960,94 @@ fn products_from_rows(
         }
     }
     Ok(products)
+}
+
+fn admin_orders_from_rows(
+    rows: Vec<sqlx::postgres::PgRow>,
+) -> Result<Vec<AdminOrderRecord>, CommerceRepositoryError> {
+    let mut orders = Vec::<AdminOrderRecord>::new();
+
+    for row in rows {
+        let order_id: uuid::Uuid = row.get("order_id");
+        let group = OrderBrandGroupRecord {
+            id: row.get("group_id"),
+            order_id,
+            brand_id: row.get("brand_id"),
+            fulfillment_status: row.get("fulfillment_status"),
+            subtotal_snapshot: row.get("subtotal_snapshot"),
+        };
+        let proof_status: Option<String> = row.get("payment_proof_status");
+
+        match orders.last_mut() {
+            Some(existing) if existing.id == order_id => {
+                if !existing.groups.iter().any(|entry| entry.id == group.id) {
+                    existing.groups.push(group);
+                }
+                if let Some(status) = proof_status {
+                    if !existing.payment_proof_statuses.contains(&status) {
+                        existing.payment_proof_statuses.push(status);
+                    }
+                }
+            }
+            _ => {
+                let mut payment_proof_statuses = Vec::new();
+                if let Some(status) = proof_status {
+                    payment_proof_statuses.push(status);
+                }
+                orders.push(AdminOrderRecord {
+                    id: order_id,
+                    order_number: row.get("order_number"),
+                    public_tracking_token: row.get("public_tracking_token"),
+                    customer_name: row.get("customer_name"),
+                    payment_status: row.get("payment_status"),
+                    global_status: row.get("global_status"),
+                    total_snapshot: row.get("total_snapshot"),
+                    created_at: row.get("created_at"),
+                    groups: vec![group],
+                    item_count: row.get("item_count"),
+                    payment_proof_statuses,
+                });
+            }
+        }
+    }
+
+    Ok(orders)
+}
+
+async fn fetch_admin_order_rows(
+    pool: &PgPool,
+    seller_user_id: Option<uuid::Uuid>,
+) -> Result<Vec<sqlx::postgres::PgRow>, CommerceRepositoryError> {
+    Ok(sqlx::query(
+        r#"
+        SELECT
+          o.id AS order_id,
+          o.order_number,
+          o.public_tracking_token,
+          o.customer_name,
+          o.payment_status,
+          o.global_status,
+          o.total_snapshot::text AS total_snapshot,
+          o.created_at,
+          obg.id AS group_id,
+          obg.brand_id,
+          obg.fulfillment_status,
+          obg.subtotal_snapshot::text AS subtotal_snapshot,
+          (
+            SELECT COUNT(*)::bigint FROM order_items oi WHERE oi.order_id = o.id
+          ) AS item_count,
+          pp.status AS payment_proof_status
+        FROM orders o
+        JOIN order_brand_groups obg ON obg.order_id = o.id
+        LEFT JOIN payment_proofs pp ON pp.order_id = o.id
+        LEFT JOIN brand_members bm ON bm.brand_id = obg.brand_id
+        WHERE ($1::uuid IS NULL OR bm.user_id = $1)
+        ORDER BY o.created_at DESC, obg.created_at ASC
+        "#,
+    )
+    .bind(seller_user_id)
+    .fetch_all(pool)
+    .await?)
 }
 
 fn validate_checkout_items(items: &[CheckoutItemInput]) -> Result<(), CommerceRepositoryError> {

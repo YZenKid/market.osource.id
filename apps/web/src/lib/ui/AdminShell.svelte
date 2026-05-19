@@ -1,5 +1,5 @@
 <script lang="ts">
-  export let active: 'dashboard' | 'brands' | 'products' | 'packages' | 'system' = 'dashboard';
+  export let active: 'dashboard' | 'brands' | 'products' | 'orders' | 'packages' | 'system' = 'dashboard';
   export let eyebrow = 'Operational control center';
   export let title: string;
   export let description: string;
@@ -8,6 +8,7 @@
     { key: 'dashboard', href: '/admin', label: 'Dashboard', helper: 'Status & next actions' },
     { key: 'brands', href: '/admin/brands', label: 'Brands', helper: 'Marketplace brand units' },
     { key: 'products', href: '/admin/products', label: 'Products', helper: 'Catalog & stock readiness' },
+    { key: 'orders', href: '/admin/orders', label: 'Orders', helper: 'Payment proof & fulfillment' },
     { key: 'packages', href: '/admin/packages', label: 'Packages', helper: 'Open-core capability gate' },
     { key: 'system', href: '/admin/system', label: 'System', helper: 'Runtime, storage, tunnel' }
   ] as const;

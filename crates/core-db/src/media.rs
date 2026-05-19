@@ -31,6 +31,15 @@ pub struct PaymentProofRecord {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PaymentProofSummaryRecord {
+    pub id: uuid::Uuid,
+    pub order_id: uuid::Uuid,
+    pub file_object_id: uuid::Uuid,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateFileObjectInput {
     pub storage_provider: String,
@@ -58,6 +67,65 @@ pub enum MediaRepositoryError {
     PaymentProofNotFound,
     #[error("database error")]
     Database(#[from] sqlx::Error),
+}
+
+pub async fn list_payment_proofs(
+    pool: &PgPool,
+) -> Result<Vec<PaymentProofSummaryRecord>, MediaRepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, order_id, file_object_id, status, created_at
+        FROM payment_proofs
+        ORDER BY created_at DESC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.iter().map(payment_proof_summary_from_row).collect())
+}
+
+pub async fn list_payment_proofs_for_user(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+) -> Result<Vec<PaymentProofSummaryRecord>, MediaRepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT DISTINCT pp.id, pp.order_id, pp.file_object_id, pp.status, pp.created_at
+        FROM payment_proofs pp
+        JOIN order_brand_groups obg ON obg.order_id = pp.order_id
+        JOIN brand_members bm ON bm.brand_id = obg.brand_id
+        WHERE bm.user_id = $1
+        ORDER BY pp.created_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.iter().map(payment_proof_summary_from_row).collect())
+}
+
+pub async fn grant_brand_member_permission(
+    pool: &PgPool,
+    brand_member_id: uuid::Uuid,
+    permission_code: &str,
+    granted_by_user_id: uuid::Uuid,
+) -> Result<(), MediaRepositoryError> {
+    sqlx::query(
+        r#"
+        INSERT INTO brand_member_permissions (brand_member_id, permission_code, granted_by_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (brand_member_id, permission_code) DO NOTHING
+        "#,
+    )
+    .bind(brand_member_id)
+    .bind(permission_code)
+    .bind(granted_by_user_id)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn create_file_object(
@@ -375,6 +443,16 @@ fn payment_proof_from_joined_row(row: &sqlx::postgres::PgRow) -> PaymentProofRec
         status: row.get("proof_status"),
         note: row.get("note"),
         created_at: row.get("proof_created_at"),
+    }
+}
+
+fn payment_proof_summary_from_row(row: &sqlx::postgres::PgRow) -> PaymentProofSummaryRecord {
+    PaymentProofSummaryRecord {
+        id: row.get("id"),
+        order_id: row.get("order_id"),
+        file_object_id: row.get("file_object_id"),
+        status: row.get("status"),
+        created_at: row.get("created_at"),
     }
 }
 

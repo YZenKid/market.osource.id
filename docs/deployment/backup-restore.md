@@ -96,6 +96,21 @@ Helper scripts tersedia di `scripts/backup/`:
 - `backup_storage.sh` — default dry-run, opsional membuat `tar.gz`
 - `restore_preflight.sh` — hanya validasi artefak/target, tidak melakukan restore
 
+Helper backup sekarang juga dapat mencatat metadata artefak sederhana untuk evidence release/runtime:
+
+- `APP_VERSION`
+- `GIT_SHA`
+- `RUNTIME_MODE`
+
+Masing-masing backup helper akan menulis file `*.metadata.json` di output directory yang sama, lalu menghitung checksum metadata itu juga saat non-dry-run.
+
+`restore_preflight.sh` juga dapat menerima:
+
+- `METADATA_FILE`
+- `CHECKSUM_FILE`
+
+untuk memastikan rehearsal memeriksa pasangan artefak+metadata secara konsisten sebelum restore destruktif dijalankan.
+
 ## Minimal evidence for Gate I
 
 - command lines yang dipakai,

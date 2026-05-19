@@ -59,4 +59,28 @@ body {
   .status-chip {
     @apply inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium;
   }
+
+  .section-heading {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .metric-card {
+    @apply panel p-5;
+  }
+
+  .list-row {
+    @apply rounded-2xl border border-border bg-surface p-5 shadow-panel;
+  }
+
+  .field-grid {
+    @apply grid gap-4 md:grid-cols-2;
+  }
+
+  .page-stack {
+    @apply space-y-6;
+  }
+
+  .eyebrow {
+    @apply text-sm font-semibold uppercase tracking-[0.2em] text-primary;
+  }
 }

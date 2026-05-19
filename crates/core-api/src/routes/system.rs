@@ -36,6 +36,10 @@ async fn runtime(
         "packages": {"registered": state.package_registry.len(), "enabled_capabilities": state.package_gate.enabled_count()},
         "install_state": install_state,
         "tunnel": tunnel,
+        "operator_caution": [
+            "Runtime status is read-only in this slice; process start/stop remains a later control-plane milestone.",
+            "Tunnel/public exposure must stay opt-in and never expose PostgreSQL or debug ports."
+        ],
         "note": "runtime status is read-only; process start/stop supervision remains a later Gate C slice"
     })))
 }

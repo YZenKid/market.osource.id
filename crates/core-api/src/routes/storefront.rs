@@ -1,7 +1,7 @@
 use axum::{
     extract::{ConnectInfo, Path, State},
-    http::{HeaderMap, StatusCode},
-    routing::{get, post},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    routing::{delete, get, post},
     Json, Router,
 };
 use core_app::AppState;
@@ -9,9 +9,12 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tower_http::limit::RequestBodyLimitLayer;
 
+use crate::authz::read_cookie;
 use crate::routes::auth::client_identity;
 
 const CHECKOUT_MAX_BODY_BYTES: usize = 64 * 1024;
+const CART_COOKIE_NAME: &str = "market_guest_cart";
+const CART_COOKIE_MAX_AGE_SECONDS: i64 = 60 * 60 * 24 * 90; // 90 days
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -25,7 +28,11 @@ pub fn router() -> Router<AppState> {
             "/checkout",
             post(checkout).route_layer(RequestBodyLimitLayer::new(CHECKOUT_MAX_BODY_BYTES)),
         )
+        .route("/cart", get(get_cart).post(upsert_cart_item).delete(clear_cart))
+        .route("/cart/items/{variant_id}", delete(delete_cart_item))
 }
+
+// ── Request / Response types ──────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 pub struct CheckoutRequest {
@@ -35,9 +42,21 @@ pub struct CheckoutRequest {
     pub items: Vec<core_db::CheckoutItemInput>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpsertCartItemRequest {
+    pub product_id: uuid::Uuid,
+    pub variant_id: uuid::Uuid,
+    pub quantity: i32,
+}
+
 #[derive(Debug, Serialize)]
 struct ProductsResponse {
     products: Vec<core_db::ProductWithVariantsRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StorefrontCartResponse {
+    pub items: Vec<core_db::StorefrontCartItem>,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,6 +77,8 @@ pub struct StorefrontErrorResponse {
     pub error: &'static str,
     pub message: String,
 }
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
 
 async fn list_products(
     State(state): State<AppState>,
@@ -85,6 +106,78 @@ async fn product_detail(
             )
         })?;
     Ok(Json(product))
+}
+
+async fn get_cart(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<StorefrontCartResponse>), (StatusCode, Json<StorefrontErrorResponse>)>
+{
+    let pool = require_pool(&state)?;
+    let (token, set_cookie) = resolve_guest_cart_token(&state, &headers);
+    let items = core_db::list_guest_cart_items(pool, &token)
+        .await
+        .map_err(repo_error)?;
+    Ok((cookie_headers(set_cookie), Json(StorefrontCartResponse { items })))
+}
+
+async fn upsert_cart_item(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpsertCartItemRequest>,
+) -> Result<(HeaderMap, Json<StorefrontCartResponse>), (StatusCode, Json<StorefrontErrorResponse>)>
+{
+    let pool = require_pool(&state)?;
+    let (token, set_cookie) = resolve_guest_cart_token(&state, &headers);
+
+    let cart = core_db::create_guest_cart(pool, token.clone())
+        .await
+        .map_err(repo_error)?;
+
+    core_db::upsert_guest_cart_item(pool, cart.id, body.product_id, body.variant_id, body.quantity)
+        .await
+        .map_err(repo_error)?;
+
+    let items = core_db::list_guest_cart_items(pool, &token)
+        .await
+        .map_err(repo_error)?;
+
+    Ok((cookie_headers(set_cookie), Json(StorefrontCartResponse { items })))
+}
+
+async fn delete_cart_item(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(variant_id): Path<uuid::Uuid>,
+) -> Result<(HeaderMap, Json<StorefrontCartResponse>), (StatusCode, Json<StorefrontErrorResponse>)>
+{
+    let pool = require_pool(&state)?;
+    let (token, set_cookie) = resolve_guest_cart_token(&state, &headers);
+
+    core_db::delete_guest_cart_item(pool, &token, variant_id)
+        .await
+        .map_err(repo_error)?;
+
+    let items = core_db::list_guest_cart_items(pool, &token)
+        .await
+        .map_err(repo_error)?;
+
+    Ok((cookie_headers(set_cookie), Json(StorefrontCartResponse { items })))
+}
+
+async fn clear_cart(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<StorefrontCartResponse>), (StatusCode, Json<StorefrontErrorResponse>)>
+{
+    let pool = require_pool(&state)?;
+    let (token, set_cookie) = resolve_guest_cart_token(&state, &headers);
+
+    core_db::clear_guest_cart(pool, &token)
+        .await
+        .map_err(repo_error)?;
+
+    Ok((cookie_headers(set_cookie), Json(StorefrontCartResponse { items: Vec::new() })))
 }
 
 async fn checkout(
@@ -159,6 +252,38 @@ async fn order_summary_by_tracking_token(
     }))
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Returns the guest cart token from the cookie, or mints a new one.
+/// The second element is a `Set-Cookie` header value to send when a new token was minted.
+fn resolve_guest_cart_token(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> (String, Option<HeaderValue>) {
+    if let Some(token) = read_cookie(headers, CART_COOKIE_NAME) {
+        return (token, None);
+    }
+    let token = uuid::Uuid::new_v4().to_string();
+    let cookie = HeaderValue::from_str(&guest_cart_cookie_string(&token, state.config.cookie_secure))
+        .expect("guest cart cookie value is generated from safe characters");
+    (token, Some(cookie))
+}
+
+fn guest_cart_cookie_string(token: &str, secure: bool) -> String {
+    let secure_suffix = if secure { "; Secure" } else { "" };
+    format!(
+        "{CART_COOKIE_NAME}={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age={CART_COOKIE_MAX_AGE_SECONDS}{secure_suffix}"
+    )
+}
+
+fn cookie_headers(set_cookie: Option<HeaderValue>) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    if let Some(value) = set_cookie {
+        headers.insert(header::SET_COOKIE, value);
+    }
+    headers
+}
+
 fn require_pool(
     state: &AppState,
 ) -> Result<&sqlx::PgPool, (StatusCode, Json<StorefrontErrorResponse>)> {
@@ -220,6 +345,8 @@ fn order_lookup_rate_limit_key(
     )
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,5 +368,69 @@ mod tests {
         );
         assert!(key.contains("storefront_order_lookup:"));
         assert!(key.ends_with(":token-abc"));
+    }
+
+    #[test]
+    fn guest_cart_cookie_contains_required_attributes() {
+        let cookie = guest_cart_cookie_string("test-token-123", false);
+        assert!(cookie.starts_with("market_guest_cart=test-token-123;"));
+        assert!(cookie.contains("HttpOnly"));
+        assert!(cookie.contains("SameSite=Lax"));
+        assert!(cookie.contains("Path=/"));
+        assert!(!cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn guest_cart_cookie_includes_secure_when_configured() {
+        let cookie = guest_cart_cookie_string("test-token-123", true);
+        assert!(cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn resolve_guest_cart_token_reuses_existing_cookie() {
+        use core_runtime::{AppConfig, RuntimeMode};
+        use secrecy::SecretString;
+        use std::net::{IpAddr, Ipv4Addr};
+
+        let state = AppState::new(AppConfig {
+            runtime_mode: RuntimeMode::Vps,
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
+            base_url: "http://127.0.0.1:8301".to_string(),
+            database_url: SecretString::from("".to_string()),
+            storage_path: std::env::temp_dir().to_string_lossy().to_string(),
+            cors_allowed_origins: Vec::new(),
+            cookie_secure: false,
+        });
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("market_guest_cart=existing-token-abc"),
+        );
+
+        let (token, set_cookie) = resolve_guest_cart_token(&state, &headers);
+        assert_eq!(token, "existing-token-abc");
+        assert!(set_cookie.is_none(), "should not set a new cookie when one already exists");
+    }
+
+    #[test]
+    fn resolve_guest_cart_token_mints_new_token_when_missing() {
+        use core_runtime::{AppConfig, RuntimeMode};
+        use secrecy::SecretString;
+        use std::net::{IpAddr, Ipv4Addr};
+
+        let state = AppState::new(AppConfig {
+            runtime_mode: RuntimeMode::Vps,
+            bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080),
+            base_url: "http://127.0.0.1:8301".to_string(),
+            database_url: SecretString::from("".to_string()),
+            storage_path: std::env::temp_dir().to_string_lossy().to_string(),
+            cors_allowed_origins: Vec::new(),
+            cookie_secure: false,
+        });
+
+        let (token, set_cookie) = resolve_guest_cart_token(&state, &HeaderMap::new());
+        assert!(!token.is_empty());
+        assert!(set_cookie.is_some(), "should set a new cookie when none exists");
     }
 }
