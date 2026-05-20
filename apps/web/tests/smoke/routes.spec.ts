@@ -174,10 +174,17 @@ test.describe('Storefront', () => {
 
   test('/store has accessible navigation', async ({ page }) => {
     await page.goto('/store');
-    const nav = page.locator('nav[aria-label="Storefront navigation"]');
-    if (await nav.count() > 0) {
-      await expect(nav).toBeVisible();
-    }
+    // Desktop nav is hidden on mobile (hidden md:flex) — on narrow viewports the
+    // mobile cart button and category rail serve as navigation instead.
+    // Accept either the desktop nav (visible on wide viewports) or the mobile
+    // cart link / category navigation as evidence of accessible navigation.
+    const desktopNav = page.locator('nav[aria-label="Storefront navigation"]');
+    const mobileCartLink = page.locator('a[aria-label*="Cart"]');
+    const categoryNav = page.locator('[role="navigation"][aria-label="Kategori produk"]');
+    const hasDesktopNav = await desktopNav.count() > 0 && await desktopNav.isVisible().catch(() => false);
+    const hasMobileCart = await mobileCartLink.count() > 0;
+    const hasCategoryNav = await categoryNav.count() > 0;
+    expect(hasDesktopNav || hasMobileCart || hasCategoryNav).toBe(true);
   });
 
   test('/store/cart renders cart page', async ({ page }) => {

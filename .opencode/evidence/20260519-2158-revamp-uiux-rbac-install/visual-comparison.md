@@ -40,8 +40,8 @@ Screenshot browser akan ditambahkan saat Playwright/browser tooling tersedia.
 
 ## Remaining gap
 
-- Screenshot `1440x1200`, `768x1024`, `390x844` untuk semua flow belum ada.
-- Playwright smoke live **sudah** dijalankan untuk project `desktop` dan lulus `22/22`; project `tablet` + `mobile` masih terblokir dependency host OS WebKit.
-- DB audit_events capture untuk `install.reset`, `demo.seed`, `demo.clear` belum ada pada stack evidence final.
+- Screenshot untuk `/install` pre-install belum ada karena stack evidence yang dipakai untuk screenshot sudah locked.
+- Screenshot untuk `/store/cart`, `/store/checkout`, `/store/orders/[token]` belum disimpan sebagai artifact, tetapi route-route tersebut lulus smoke pada 3 viewport.
+- Cross-viewport browser validation saat ini berbasis Chromium emulation untuk tablet/mobile, bukan WebKit/Safari parity.
 
-Claim level: `style-equivalent` dengan evidence gap screenshot dan cross-viewport browser deps. Bukan parity claim.
+Claim level: `style-equivalent` dengan screenshot evidence tersedia pada 3 viewport utama dan smoke `66/66` pass. Bukan parity claim.

@@ -73,48 +73,75 @@ Tanggal: 2026-05-19 22:29 WIB
 
 Playwright MCP tidak tersedia di environment ini, tetapi Playwright CLI berhasil dijalankan.
 
-### Desktop smoke
+### Full suite — 66/66 pass
 
-- Config: `apps/web/playwright.config.ts` sekarang memakai `webServer` untuk auto-start SSR lokal.
-- Command validasi: `cd apps/web && npx playwright test tests/smoke/routes.spec.ts --project=desktop`
-- Result: `22/22` pass.
+- Projects: `desktop` (1440x900), `tablet-chromium` (768x1024 Chromium emulation), `mobile-chromium` (390x844 Chromium emulation)
+- Backend: evidence stack `marketevidence` port 7401
+- Command: `PLAYWRIGHT_PORT=4174 PLAYWRIGHT_ORIGIN=http://127.0.0.1:4174 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 PLAYWRIGHT_PUBLIC_API_BASE_URL=http://127.0.0.1:7401 npx playwright test tests/smoke/routes.spec.ts`
+- Result: `66 passed (6.3s)` — 0 failures
 
-### Bug yang ditemukan lewat Playwright dan diperbaiki
+### Bugs ditemukan dan diperbaiki via Playwright
 
-- `section[aria-label="Product listing"]` di `/store` menjadi `hidden` pada viewport `390x844` ketika `visibleProducts.length === 0`.
-- Root cause: empty CSS grid tanpa child collapse ke zero height; Playwright menilai elemen `hidden`.
-- Fix: loading/error/empty state dipindah ke dalam section product listing dengan wrapper `col-span-full`.
+1. `section[aria-label="Product listing"]` di `/store` menjadi `hidden` pada viewport `390x844` ketika `visibleProducts.length === 0`. Root cause: empty CSS grid collapse ke zero height. Fix: loading/error/empty state dipindah ke dalam section dengan `col-span-full`.
+2. Test `/store has accessible navigation` salah asumsi desktop nav visible di mobile. Fix: test diperbarui untuk menerima desktop nav ATAU mobile cart button ATAU category rail.
 
-### Cross-viewport blocker
+### Cross-viewport note
 
-- Project `tablet` + `mobile` berbasis WebKit masih gagal start karena dependency host OS belum ada (`libicudata.so.66`, `libjpeg.so.8`, `libwebp.so.6`, `libffi.so.7`, dll).
-- Ini bukan bug aplikasi web; ini blocker environment.
+- Tablet + mobile projects menggunakan Chromium emulation, bukan WebKit.
+- WebKit system deps tidak tersedia di host (`libicudata.so.66`, `libjpeg.so.8`, `libwebp.so.6`, dll).
+- Ini bukan bug aplikasi; ini environment constraint.
 
-Browser evidence saat ini terdiri dari:
+Browser evidence terdiri dari:
 - HTTP smoke test via curl (root redirect, page titles, API flows)
-- Playwright desktop smoke (`22/22` pass)
-- Backend test logs (46 unit tests pass, 0 failures)
+- Playwright 66/66 pass (desktop + tablet-chromium + mobile-chromium)
+- Backend test logs (57 unit tests pass, 8 ignored, 0 failures)
 - `npm run check` + `npm run build` clean
 
 ## DB audit_events capture
 
-Query dijalankan pada `marketosourceid-postgres-1` (DB: `market_osource`, user: `market`):
+Capture final dilakukan pada stack evidence terisolasi `marketevidence` (DB: `market_osource`, user: `market`, backend: `http://127.0.0.1:7401`).
+
+### Setelah setup + demo seed
 
 ```sql
-SELECT DISTINCT action, target_type, result FROM audit_events ORDER BY action;
+SELECT action, target_type, result, metadata, created_at FROM audit_events ORDER BY created_at DESC LIMIT 10;
 ```
 
 Result:
 ```
-    action     |    target_type     | result
----------------+--------------------+---------
- auth.login    | auth_session       | success
- auth.login    | auth_session       | failure
- install.setup | installation_state | failure
- install.setup | installation_state | success
+    action     |    target_type     | result  |                                          metadata                                           |          created_at
+---------------+--------------------+---------+---------------------------------------------------------------------------------------------+-------------------------------
+ demo.seed     | demo_data          | success | {"seeded": true}                                                                            | 2026-05-20 00:34:08.810327+00
+ install.setup | installation_state | success | {"locked": true, "demo_seeded": true, "session_created": true, "demo_seed_requested": true} | 2026-05-20 00:33:58.972785+00
 ```
 
-Catatan: `install.reset`, `admin.demo.seed`, `admin.demo.clear` tidak muncul di DB ini karena stack evidence final (`marketosourceid`) sudah di-reset dan tidak menjalankan ulang demo seed/clear/reset setelah reset. Audit events untuk operasi tersebut hanya ada di stack smoke terisolasi `marketrevamp` (port 7401) yang sudah dihapus volumenya. Ini adalah gap evidence, bukan bug — endpoint sudah terbukti berjalan di smoke terisolasi (lihat tabel smoke di atas).
+### Setelah demo clear
+
+Result:
+```
+    action     |    target_type     | result  |                                          metadata                                           |          created_at
+---------------+--------------------+---------+---------------------------------------------------------------------------------------------+-------------------------------
+ demo.clear    | demo_data          | success | {"cleared": true}                                                                           | 2026-05-20 00:34:17.648879+00
+ demo.seed     | demo_data          | success | {"seeded": true}                                                                            | 2026-05-20 00:34:08.810327+00
+ install.setup | installation_state | success | {"locked": true, "demo_seeded": true, "session_created": true, "demo_seed_requested": true} | 2026-05-20 00:33:58.972785+00
+```
+
+### Setelah install reset
+
+Backend bug diperbaiki: success audit reset kini ditulis **setelah** reset dengan `actor_user_id = NULL` dan metadata non-PII (`prior_actor_user_id`, `prior_actor_role_code`), sehingga tetap persisten walau tabel `users` dan `audit_events` dibersihkan saat reset.
+
+Result:
+```
+    action     |    target_type     | result  |                                                          metadata                                                          |          created_at
+---------------+--------------------+---------+----------------------------------------------------------------------------------------------------------------------------+-------------------------------
+ install.reset | installation_state | success | {"confirmed": true, "prior_actor_user_id": "6632465b-11a4-4a20-bc05-3169f3acca96", "prior_actor_role_code": "super_admin"} | 2026-05-20 01:38:58.112394+00
+```
+
+### Verify install state after reset
+
+```json
+{"state":"unconfigured","locked":false,"installed":false,"runtime_mode":null,"core_version":null,"database_connected":true}
+```
 
 ## Catatan deployment
 

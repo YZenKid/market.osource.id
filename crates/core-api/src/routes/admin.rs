@@ -692,17 +692,22 @@ async fn reset_install(
         ));
     }
 
+    let success_audit_metadata = reset_install_success_audit_metadata(
+        session_user.id,
+        &session_user.role_code,
+    );
+
     core_db::reset_installation_state(pool)
         .await
         .map_err(install_repo_error)?;
     write_admin_audit_event(
         Some(pool),
-        Some(actor.user_id),
+        None,
         "install.reset",
         "installation_state",
         None,
         "success",
-        &[("confirmed", Value::Bool(true))],
+        &success_audit_metadata,
     )
     .await;
 
@@ -799,6 +804,23 @@ fn installer_error(error: core_installer::DemoSeedError) -> (StatusCode, Json<Au
     )
 }
 
+fn reset_install_success_audit_metadata(
+    prior_actor_user_id: uuid::Uuid,
+    prior_actor_role_code: &str,
+) -> Vec<(&'static str, Value)> {
+    vec![
+        ("confirmed", Value::Bool(true)),
+        (
+            "prior_actor_user_id",
+            Value::String(prior_actor_user_id.to_string()),
+        ),
+        (
+            "prior_actor_role_code",
+            Value::String(prior_actor_role_code.to_string()),
+        ),
+    ]
+}
+
 async fn write_admin_audit_event(
     pool: Option<&sqlx::PgPool>,
     actor_user_id: Option<uuid::Uuid>,
@@ -865,5 +887,18 @@ mod tests {
 
         assert_eq!(error.0, StatusCode::BAD_REQUEST);
         assert_eq!(error.1.error, "invalid_fulfillment_status");
+    }
+
+    #[test]
+    fn reset_install_success_audit_metadata_captures_non_pii_actor_context() {
+        let actor_user_id = uuid::Uuid::new_v4();
+
+        let metadata = reset_install_success_audit_metadata(actor_user_id, "super_admin");
+        let metadata = core_db::safe_audit_metadata(&metadata).expect("metadata should be safe");
+
+        assert_eq!(metadata["confirmed"], true);
+        assert_eq!(metadata["prior_actor_user_id"], actor_user_id.to_string());
+        assert_eq!(metadata["prior_actor_role_code"], "super_admin");
+        assert!(metadata.get("prior_actor_email").is_none());
     }
 }
