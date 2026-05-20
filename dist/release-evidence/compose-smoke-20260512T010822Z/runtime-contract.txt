@@ -1,5 +1,0 @@
-[verify_runtime_contract] base_url=http://127.0.0.1:18301
-[verify_runtime_contract] health={"status":"healthy","probe":"liveness","app":"market.osource.id","version":"0.1.0","git_sha":null,"runtime_mode":"vps","uptime_seconds":5,"note":"liveness confirms the process is serving HTTP; use /ready for dependency and install-state readiness"}
-[verify_runtime_contract] ready={"status":"not_ready","probe":"readiness","blocking_checks":1,"checks":[{"name":"database","ok":true,"message":null},{"name":"migrations","ok":true,"message":null},{"name":"storage","ok":true,"message":null},{"name":"install_state","ok":false,"message":"installation is not locked or install state table is unavailable"},{"name":"package_registry","ok":true,"message":null},{"name":"package_compatibility","ok":true,"message":null}]}
-[verify_runtime_contract] version={"app":"market.osource.id","version":"0.1.0","git_sha":null,"runtime_mode":"vps","build_profile":"unknown"}
-[verify_runtime_contract] runtime contract verified

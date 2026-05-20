@@ -1,4 +1,0 @@
-NAME                              IMAGE                          COMMAND                  SERVICE    CREATED          STATUS                                     PORTS
-market-osource-smoke-backend-1    market-osource-smoke-backend   "market-backend"         backend    6 seconds ago    Up 5 seconds (healthy)                     0.0.0.0:18301->8080/tcp, [::]:18301->8080/tcp
-market-osource-smoke-postgres-1   postgres:16-alpine             "docker-entrypoint.s…"   postgres   57 seconds ago   Up 57 seconds (healthy)                    5432/tcp
-market-osource-smoke-web-1        market-osource-smoke-web       "docker-entrypoint.s…"   web        6 seconds ago    Up Less than a second (health: starting)   0.0.0.0:18300->3000/tcp, [::]:18300->3000/tcp
